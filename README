@@ -1,1 +1,16 @@
-starfleet wormhole
+# Starfleet Wormhole
+
+A lightweight, Git-based communication channel between the repository owner, ChatGPT, and the Starfleetctl fleet.
+
+## Start here
+
+- [Collaboration protocol](COLLABORATION.md) — directory layout, message format, and operating rules.
+- [Decisions](decisions/) — durable agreements that apply across messages.
+- [Inbox](inbox/) — requests and instructions sent to the fleet.
+- [Outbox](outbox/) — replies and hand-offs from the fleet.
+
+## System boundaries
+
+Starfleetctl remains authoritative for task tracking, dashboard state, agent execution, and its normal report workflow. This repository carries cross-system messages and durable coordination decisions; it must not become a parallel task tracker or report archive.
+
+Use the default branch, `master`, unless the owner explicitly says otherwise.
