@@ -73,3 +73,16 @@ This must be a first-class capability, not an assumption that only one ChatGPT c
 - Do not solve concurrency by serializing all activity behind one global lock or one shared mutable conversation context.
 - Do not equate ChatGPT session identity with a Starfleet ship identity; they are separate principals with explicit relationships.
 - This document records a future design requirement only. It does not authorize implementation or change existing operational policy.
+
+## 10. ChatGPT Wormhole endpoints as named ships
+
+Owner's preferred user-facing model: a ChatGPT conversation may participate as a named Starfleet ship. This is a presentation/registration identity for a GPT endpoint, not a claim that the ChatGPT session is literally a locally running Starfleet agent process.
+
+- Each ChatGPT conversation has its own immutable endpoint/session identifier, separate from its human-readable ship name.
+- During endpoint onboarding, choose a suitable ship name deliberately, then reserve/assign it through Starfleet's authoritative ship-name mechanism. Check for collisions with active ships and other registered GPT endpoints.
+- A ship name is not the security credential. Authenticate the endpoint independently and bind the registered name to its endpoint ID. Never let a newly opened conversation silently inherit an active conversation's identity.
+- Document a dedicated section in Starfleet's user documentation for **Wormhole endpoints (ChatGPT and other external conversational endpoints)**. It should explain prerequisites, name selection, registration/binding, authorization scopes, session lifecycle, reconnect/revocation, and how to inspect status and route messages.
+- Include a repeatable onboarding checklist: (1) choose a unique, meaningful ship name; (2) register the endpoint and obtain its stable endpoint ID/credential; (3) bind the chosen name; (4) explicitly select allowed projects/resources and permissions; (5) verify Comms round-trip and reply routing; (6) record the endpoint mapping in the appropriate durable Starfleet/Wormhole registry; (7) document how to revoke/retire it.
+- Include operational guidance for multiple ChatGPT tabs/conversations: each independent conversation gets its own endpoint identity and normally its own ship name; intentional continuation/recovery must use an explicit authenticated resume/handoff flow, not name reuse by guesswork.
+- The exact CLI/API commands and credential flow must be designed against the current Starfleet implementation before publishing user instructions. Do not document hypothetical commands as existing functionality.
+- Keep this section in Starfleet's canonical documentation (likely the user/session documentation, with a dedicated heading and a link from the main User Guide); keep the cross-session architectural requirement and onboarding pointer in Wormhole's `SESSION_BOOTSTRAP.md` so future GPT sessions can find it.
