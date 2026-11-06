@@ -101,7 +101,22 @@ Keep these states distinct:
 
 A successful Git push is not proof that the recipient fetched, read, processed, or acknowledged the message.
 
-## 7. Multi-recipient and multi-session isolation
+## 7. Explicit delivery confirmation (required when requested)
+
+A sender must not infer delivery from a successful Git commit/push or from the message merely appearing in the shared repository. When a message requests a delivery receipt (and for coordination/task messages where the sender needs proof that the target ship received it), the recipient must publish an explicit, durable acknowledgement after it has fetched the message and successfully picked it up from `new/` into `cur/`.
+
+- The receipt is a **new message addressed to the original sender's own spool** (`spool/<sender>/new/<ack-message-id>`), using the same normal immutable envelope and Git publication rules.
+- It must carry a dedicated acknowledgement type/status and identify the original logical `Message-ID`, original sender, acknowledging recipient, and the receipt time (UTC). Include the original Correlation-ID/Task-ID where present.
+- The receipt confirms **delivery/pickup only**: the recipient fetched and durably recorded the message as picked up. It does not claim that the requested work was completed.
+- Processing completion/failure must be reported separately with a distinct outcome acknowledgement, also correlated to the original Message-ID. Never conflate `delivered`, `processed`, and `completed`.
+- A recipient must generate at most one logical receipt per original Message-ID and recipient. Retries reuse the same receipt Message-ID and exact bytes; duplicate receipt publication is idempotent. Persist enough state to recover if a crash occurs between pickup and receipt publication.
+- The sender treats the message as delivery-confirmed only after it has fetched and validated that correlated receipt from its own spool. A push of the receipt by the recipient is not, by itself, proof the sender has received it.
+- If a requested receipt does not arrive within the task's stated timeout, report delivery as unconfirmed and retry/escalate according to policy; do not silently mark the task delivered.
+- Fanout requires an independent delivery receipt from every recipient for which confirmation was requested. One recipient's receipt cannot confirm delivery to another.
+
+The envelope should therefore support explicit acknowledgement metadata, for example an `Ack-Type` (delivery or processing), `Acknowledges-Message-ID`, `Acknowledged-By`, `Acknowledged-At`, and an outcome/status where applicable. These are semantic fields, not mutable edits to the original message.
+
+## 8. Multi-recipient and multi-session isolation
 
 - Every recipient gets its own spool and independent `new/cur` state.
 - One recipient moving its copy to `cur` cannot change another recipient's state.
@@ -109,11 +124,11 @@ A successful Git push is not proof that the recipient fetched, read, processed, 
 - A ship's active endpoint identity and any ChatGPT session identity remain separate principals. Do not use a mutable display name as authentication.
 - If multiple independent sessions operate as the same ship, define ownership/lease or claim semantics before allowing concurrent `new -> cur` transitions. Do not let two consumers process the same message concurrently.
 
-## 8. Relationship to Comms
+## 9. Relationship to Comms
 
 Comms remains the interactive/low-latency channel. Wormhole spools provide durable, asynchronous, repository-backed delivery and recovery. The spool model intentionally follows Comms' per-ship spool convention, but this draft does not authorize bypassing the Comms Bus or duplicating its external-post/idempotency responsibilities. The integration boundary must be designed against the actual Comms API.
 
-## 9. Required tests before implementation is accepted
+## 10. Required tests before implementation is accepted
 
 - Two senders concurrently publish distinct messages to one recipient; neither is lost.
 - Retry after push rejection preserves the same Message-ID and bytes.
@@ -125,8 +140,10 @@ Comms remains the interactive/low-latency channel. Wormhole spools provide durab
 - Fetch/rebase/push races, same-path conflicts, interrupted rebase, and bounded retry exhaustion preserve all local messages.
 - No force-push or destructive reset path exists.
 - A push is never reported as read, processed, or acknowledged.
+- A requested delivery receipt is emitted only after recipient pickup, is correlated to the original Message-ID, survives retry/restart, and is visible to the sender before delivery is marked confirmed.
+- Delivery receipt and processing outcome acknowledgement are distinct; fanout requires independent receipts from each requested recipient.
 
-## 10. Open details (do not guess in implementation)
+## 11. Open details (do not guess in implementation)
 
 - Exact envelope grammar and whether an existing RFC 5322 parser is appropriate.
 - Stable ship-ID to spool-path mapping and authorization rules.
