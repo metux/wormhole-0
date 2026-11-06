@@ -79,3 +79,16 @@ Record and follow the design draft `design-drafts/PER-SHIP-MAILDIR-SPOOLS.md` in
 - Do not start a broad rewrite from this draft. First reconcile the current Comms Bus/PostExternal integration, W0-026 idempotency rules, daemon/worktree lifecycle and the draft into a concrete incremental plan. Do not invent a parallel Comms routing path.
 
 Continue with small commits and focused tests. Report actual branch tip, dirty state, exact test output and remaining blockers.
+
+## 6. Mandatory explicit delivery receipts (owner clarification, 2026-11-07)
+
+Implement this as a first-class protocol requirement, not merely an optional note in reporting. Reconcile with the updated `design-drafts/PER-SHIP-MAILDIR-SPOOLS.md` (commit `6843fed85f637741a0d1b95dcf60c72aab02687b`):
+
+- For coordination/task messages that request confirmation, the recipient must publish a separate immutable delivery-receipt message back into the original sender's per-ship `new/` spool after it has fetched the original and durably picked it up (`new -> cur`).
+- The receipt must identify the original Message-ID, sender, acknowledging recipient and UTC receipt time, and preserve Correlation-ID/Task-ID. The sender marks delivery confirmed only after it fetches and validates this correlated receipt.
+- A successful push, shared-repository visibility, or the recipient's `new -> cur` transition alone is not a delivery confirmation visible to the sender.
+- Retries/restarts must preserve one stable receipt identity and exact bytes; duplicate receipt publication is idempotent. Fanout requires one independent receipt per requested recipient.
+- Delivery receipt is not processing/completion acknowledgement. Report processing outcome separately and correlate it to the original Message-ID.
+- Add tests for missing/delayed receipt, duplicate/replayed receipt, crash between pickup and receipt publication, fanout partial receipt, wrong recipient/original ID, and sender-side validation. Never report delivery as confirmed without the fetched receipt evidence.
+
+Keep the implementation incremental: first produce a concrete Comms Bus/W0-026 integration plan for these receipts and the approved per-ship spool model; do not start a broad rewrite.
