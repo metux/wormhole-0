@@ -155,3 +155,16 @@ OpenCode plugin research (checked 2026-11-06):
 - Draft only; no implementation authorized: `design-drafts/ASK_TOOL_POLICY_AND_RELAY.md` (published in commit `58a6017cf0b7cdda8a9c0b10e87a0195a0c35c89`).
 - The draft requires inspecting and reusing the existing background config-generation path and actual OpenCode schema; console and background must both explicitly deny interactive ask. It also records the plugin interception research and a separately opt-in Starfleet Web Relay concept.
 - Existing console processes must never be restarted/relaunched/duplicated to apply this policy. Config changes must not be claimed to affect an already-running process unless live reload is verified; otherwise apply only on a normal owner-authorized future launch.
+
+## Update 2026-11-06 — concurrent ChatGPT sessions
+
+Owner requirement: Wormhole should eventually support multiple independent ChatGPT sessions accessing the same installation concurrently, so separate planning/control conversations can proceed in parallel.
+
+- Treat ChatGPT sessions as first-class principals, distinct from Starfleet ships.
+- Give each session a trusted stable identity; isolate session-local context and pending requests by default.
+- Make shared project/task resources explicitly addressable and versioned. Use optimistic concurrency/transactions; reject or surface stale writes instead of last-writer-wins.
+- Correlate every request/response and make retries idempotent. Route replies to the originating session unless explicitly delegated.
+- Model task ownership, shared access, claims/leases with fencing, and explicit handoff records.
+- Preserve append-only audit history with actor/session attribution. Enforce authorization per session/resource; one session must not implicitly inherit another's private context or approvals.
+- Avoid a global current-session variable or global lock. Test simultaneous writes, duplicate delivery, crashes, stale leases, handoffs, and independent parallel tasks.
+- Architecture draft (not implementation authorization): `design-drafts/MULTI_SESSION_ACCESS.md`.
