@@ -86,3 +86,14 @@ Owner's preferred user-facing model: a ChatGPT conversation may participate as a
 - Include operational guidance for multiple ChatGPT tabs/conversations: each independent conversation gets its own endpoint identity and normally its own ship name; intentional continuation/recovery must use an explicit authenticated resume/handoff flow, not name reuse by guesswork.
 - The exact CLI/API commands and credential flow must be designed against the current Starfleet implementation before publishing user instructions. Do not document hypothetical commands as existing functionality.
 - Keep this section in Starfleet's canonical documentation (likely the user/session documentation, with a dedicated heading and a link from the main User Guide); keep the cross-session architectural requirement and onboarding pointer in Wormhole's `SESSION_BOOTSTRAP.md` so future GPT sessions can find it.
+
+### 10.1 Separate naming namespace for GPT endpoints
+
+GPT endpoint ship names must not collide with names used by the operational Starfleet fleet.
+
+- Reserve a visibly distinct naming namespace for external GPT/Wormhole endpoints. Prefer names associated with another galaxy or a clearly separate quadrant/region, rather than reusing familiar names from the active fleet.
+- The namespace rule must be enforced by the authoritative name registry at registration time, not merely recommended in prose. Reject collisions with active fleet names, reserved names, and other GPT endpoint names.
+- Keep the endpoint class/namespace as structured registry metadata (for example, endpoint kind plus naming realm); do not rely only on parsing a name prefix to determine permissions or identity.
+- Publish a short, curated naming convention/list in the Starfleet Wormhole-endpoint documentation. Names should be distinctive, pronounceable, easy to type, and unlikely to be confused with existing ships.
+- If the chosen realm/quadrant later changes, preserve existing endpoint IDs and provide an explicit rename/migration procedure; never silently rename or rebind a live endpoint.
+- The exact galaxy/quadrant and final naming pattern remain to be selected against the current fleet roster before implementation.
