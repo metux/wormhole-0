@@ -117,3 +117,17 @@ At last checkpoint `X11Libre/xserver:wip/xaverius` was still `eaff9a2fde04d84602
 - W0-054 commit `1e39a5e20751ed61bfe8448c4a6865bd4e3f86db`
 - W0-055 commit `ea437911b5ec1721b148b08c186f379c47e559fe`
 - Bootstrap file first published at `e52db09ca64179df4f79e72ba3c2312d26e62d2b`; later updates supersede this SHA.
+
+
+## Update 2026-11-06 22:20Z — recurring Comms health probes and Defiant ask-stall follow-up
+
+New standing coordination requirement from the owner:
+- Enterprise must run real end-to-end Comms round-trip liveness probes during every normal coordination cycle (approximately every five minutes) with all active ships, at minimum Defiant and Laforge.
+- Each probe uses a unique nonce/correlation ID and records send/response Comms IDs, timestamps, latency, and outcome. Require a correlated reply; local file inspection or process/PID presence is not a successful probe.
+- Default response deadline is 60 seconds, with one retry. Distinguish slow/no response from a confirmed hang; track consecutive misses and last successful round-trip.
+- Specifically query Defiant for pending interactive `ask`/approval prompts and exact prompt correlation ID. Never auto-approve protected actions. Enterprise reports every cycle durably in Wormhole outbox.
+- W0-062 is the recurring Enterprise liveness task. Publication is not delivery; await actual Comms delivery/ack and the initial probe report.
+- W0-063 assigns Laforge to diagnose and, if confirmed, eliminate Defiant's console/TTY-bound ask stall mode. Desired direction: supervised background worker, durable correlated async question/response, restart-safe pending asks, watchdog states, and no unsafe auto-approval.
+- Laforge's latest known branch tip at this checkpoint is `8f0d7b4385abedf2a93e5c187a710c2bad9fc43e`; W0-060 is its active correction task.
+- Defiant's latest known Xserver tip is `eaff9a2fde04d846021c1dddb26b35e4b77bfeac`; W0-061 is its active registry correction task.
+- Latest authoritative spec tip checked: `dff0d69ef45ff55cceebb744a7458109ff3b1dc2`.
