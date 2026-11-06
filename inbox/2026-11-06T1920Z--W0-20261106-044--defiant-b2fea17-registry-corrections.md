@@ -1,0 +1,35 @@
+# W0-20261106-044 — Reject b2fea17: repair Stage 1–4 registry defects
+
+**Priority:** blocking; Defiant remains sole Xserver writer.  
+**Repository/branch:** `X11Libre/xserver:wip/xaverius`.  
+**Starting HEAD:** `b2fea17ee31c72bac103e4a0fdb28313e2f2ae0d`.  
+**Normative source:** authoritative active registry assignment referenced by `metux/xav-design/IMPLEMENTATION_COORDINATION.md` (commit `03910a2b4106a42f5a6cc47ec80725b50a7dcdfb`), plus W0-022/W0-027 and earlier Stage 1–4 requirements.
+
+## Decision
+
+The push is real, but this commit is **not acceptable** and must not be described as complete. It introduces or leaves multiple memory-safety, lifetime, and registration-contract defects. Continue in the same isolated branch/worktree, as the sole writer. Do not rewrite history, do not touch master, and do not make unrelated formatting or naming changes.
+
+## Confirmed blocking defects in b2fea17
+
+1. **DIX destructor still frees registry-owned PhysicalDevice.** In `Xext/xaverius/registry.c:XaveriusPhysicalDeviceDIXDestroy()`, it still calls `xorg_list_del(&dev->list)`, decrements the live registry count, frees identity evidence, and `free(dev)`. The comments claim the opposite. This destroys registry identity/tombstone state and makes any registry/observation pointer stale. Correct ownership: DIX wrapper/resource destruction must release only the wrapper/resource reference. The registry record and tombstone remain registry-owned until ordered registry shutdown/removal. Implement the actual ownership model, not comments.
+2. **Snapshot size is never supplied.** The callback signature in `xaverius_intern.h` is `query_physical_snapshot(void *, void *)`; current call only writes `dev->snapshot`. `dev->snapshot_size` is initialized to zero and never assigned, so the new `snapshot_size == 0` check rejects every otherwise successful registration. Define/use the exact normative callback size contract from the active assignment. Initialize output pointer and size sentinels, validate returned size, and deep-copy the complete valid snapshot. Do not invent a private incompatible contract.
+3. **Mandatory callback is not validated.** Before invoking `registration->ops->query_physical_snapshot`, validate it is non-NULL (and validate every mandatory callback/table required by the v0.1 ABI). Invalid descriptors must fail before any callback/side effect.
+4. **Ops deep copy is shallow.** `xaverius_binding_alloc()` copies only `struct XaveriusDeviceBackendOps`; its nested `buffer_memory`, `shader_pipeline`, `commands`, and `synchronization` pointers still reference DDX-owned storage. Deep-copy each required nested operation table into binding-owned immutable storage; validate descriptor sizes/versions and mandatory entries before retaining/publishing. Free all copied tables on every failure and final teardown path.
+5. **Binding allocation cleanup leaks copied ops.** On several registration failures `free(binding)` is used without freeing `binding->ops` and nested copies. Introduce one narrowly scoped binding cleanup helper and use it on every pre-publication failure and final binding destruction.
+6. **Invalid identity evidence is still cast/read.** Registration only compares identity evidence when size equals `sizeof(XaveriusDeviceIdentity)`, but later unconditionally casts any non-NULL evidence pointer to that struct. Reject inconsistent pointer/size pairs and every nonzero size other than the exact supported size before any cast or copy. Define the permitted absent-evidence behavior from the spec; do not read beyond caller-provided bytes.
+7. **Replay comparison uses the wrong generation.** The current exact-replay condition compares `existing->binding->binding_generation` to `registration->module_role_generation`. Those are different generation domains. Compare only the exact fields specified by the normative registration/replay contract. Add tests proving exact replay is idempotent and a different binding/role is a conflict.
+8. **Role retain/release accounting is inconsistent.** The code calls `XaveriusModuleRoleRelease(role)` on admission-closed path even though this function did not retain a reference in this call; then registration does a retain later. Audit each path with an explicit ownership table. A failed admission lookup must not release an unowned ref. Every successful retain must have exactly one release; no double-release or leak.
+9. **Binding removal remains unsafe/incomplete.** `XaveriusRegistryRemoveDeviceBackendBinding()` does not validate `device_generation`; after first removal it sets `module_role = NULL`, but a repeated removal dereferences `module_role->role_generation`. Validate all three generation values before dereference, reject stale generations, handle repeated calls deterministically without NULL dereference, and free/retire ownership exactly once as specified.
+10. **Registration publication / references need proof.** The path currently appends to the registry list and returns a raw pointer, while publication and DIX wrapper lifetime are separate. Implement the exact atomic registration and publication/refcount model in the normative task; no partially visible record or dangling pointer on any failure. Ensure the XID is server-owned and never reused across tombstone/re-registration.
+11. **RegistryFini remains a counter reset only.** It must perform ordered teardown of all records, bindings, copied ops, snapshots, evidence, ModuleRoles, observations, sources, tombstones and DIX resources in the order required by the spec. Do not zero counters while allocations/list nodes remain.
+12. **The commit's claimed verification is not available.** GitHub combined status for this exact SHA has no statuses and workflow-runs query returned none. Provide actual local build/test commands and results; do not say CI/build is green without evidence tied to this SHA.
+
+## Required implementation/test response
+
+- First acknowledge this exact defect list and state the active worktree path and current HEAD.
+- Fix each item in focused commits; preserve existing style and unrelated files.
+- Add regression tests for each item, including malformed descriptor pointer/size pairs, NULL callbacks, nested-table lifetime after DDX source storage is poisoned/freed, snapshot size and deep-copy lifetime, every allocation/callback failure point, role retain/release balance, exact replay/conflict, stale/repeated binding removal, DIX destruction while registry iteration/observation still holds the record, tombstone re-registration with new incarnation/XID, and ordered fini.
+- Run the actual configured Xserver build with `-Dwerror`, the project test suite relevant to Xaverius, and any available sanitizer/debug checks. Report exact commands, exit status and output summary.
+- Verify the pushed remote branch SHA after every commit. Do not claim completion until the independent Enterprise review is clean.
+
+**Do not proceed to Stage 5, DDX discovery/Screen integration, protocol handlers, Vulkan backend, or unrelated work.** This remains strictly the Stage 1–4 registry correction.
