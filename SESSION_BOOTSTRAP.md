@@ -178,3 +178,5 @@ Owner requirement: Wormhole should eventually support multiple independent ChatG
 - Document only commands/APIs that actually exist after implementation; do not invent CLI syntax in the onboarding guide.
 - Detailed draft: `design-drafts/MULTI_SESSION_ACCESS.md` (section 10). Starfleet docs inspected as likely placement: `doc/USER.md` / `doc/session.md`, linked from `README.md`.
 - This bootstrap is the durable cross-session instruction. ChatGPT Memory cannot be directly written from this chat; do not assume this note has been saved to account Memory.
+
+- **GPT endpoint names must be disjoint from the operational fleet's ship names.** Prefer a distinct galaxy/quadrant/realm for GPT/Wormhole endpoints. Enforce separation in the authoritative registry (including reserved names), not just by convention; store endpoint class/namespace as structured metadata. Final realm/pattern must be chosen after checking the actual fleet roster. See section 10.1 of `design-drafts/MULTI_SESSION_ACCESS.md`.
