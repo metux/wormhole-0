@@ -20,7 +20,7 @@ Der Benutzer soll danach Wormholes ausschließlich in `.starfleet-ai/conf/wormho
 **Wichtige Pfadentscheidung des Benutzers:** Alle verwalteten Wormhole-Checkouts und deren Runtime-State liegen unter:
 
 ```
-.star​​fleet-ai/var/wormholes/
+.starfleet-ai/var/wormholes/
 ```
 
 Der komplette Prefix `/var/wormholes/` muss in der von starfleetctl installierten Datei `.starfleet-ai/.gitignore` ignoriert werden. Nicht `.starfleet-ai/wormholes/`, nicht im Workspace-Root und keine konfigurierbaren individuellen Checkout-Pfade.
