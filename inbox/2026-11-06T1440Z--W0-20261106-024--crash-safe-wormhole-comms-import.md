@@ -138,6 +138,8 @@ Die kanonischen Records liegen dauerhaft unter:
 
     <BusDir>/external/<key>.json
 
+Ergänze Bus.New() minimal um die Initialisierung dieses External-Directories (MkdirAll mit den bestehenden Comms-Verzeichnis-Konventionen). Ein Fehler beim Anlegen muss Bus.New() fehlschlagen lassen; nicht erst beim ersten Import unbemerkt weiterlaufen.
+
 key ist ein hexadezimaler SHA-256 über eine eindeutig abgegrenzte Kodierung von source und externalID (z.B. source + NUL + externalID). Keine ungeprüften Quellwerte als Pfadsegmente verwenden. Beim Lesen stets zusätzlich Source und ExternalID im Record gegen den angefragten Schlüssel prüfen; Hash-/Dateinamenskollision oder falscher Inhalt ist ein Integritätsfehler.
 
 Die External-Records sind langlebige Dedupe-Tombstones. Kein automatisches TTL, keine Löschung beim ACK, Prune, Purge oder Entfernen eines Wormhole-Checkouts. Eine spätere explizite Admin-GC wäre ein eigener Auftrag und ist hier nicht umzusetzen.
