@@ -168,3 +168,13 @@ Owner requirement: Wormhole should eventually support multiple independent ChatG
 - Preserve append-only audit history with actor/session attribution. Enforce authorization per session/resource; one session must not implicitly inherit another's private context or approvals.
 - Avoid a global current-session variable or global lock. Test simultaneous writes, duplicate delivery, crashes, stale leases, handoffs, and independent parallel tasks.
 - Architecture draft (not implementation authorization): `design-drafts/MULTI_SESSION_ACCESS.md`.
+
+### Named ChatGPT Wormhole endpoints
+
+- Owner prefers that each GPT conversation can appear as a deliberately named Starfleet ship (e.g. a suitable ship name selected during onboarding).
+- Keep the immutable authenticated GPT endpoint/session ID separate from its human-readable ship name. The name is a routing/display identity, not an authentication secret.
+- Each independent ChatGPT conversation gets its own endpoint identity and normally its own reserved ship name. Never silently reuse an active conversation's name/identity; continuation requires explicit authenticated resume/handoff.
+- Starfleet's canonical documentation should gain a dedicated **Wormhole endpoints** section for ChatGPT and other external conversational endpoints. It should cover name selection, registration/binding, authentication, authorization scopes, Comms verification, reconnect, lifecycle, revocation, and multi-session operation.
+- Document only commands/APIs that actually exist after implementation; do not invent CLI syntax in the onboarding guide.
+- Detailed draft: `design-drafts/MULTI_SESSION_ACCESS.md` (section 10). Starfleet docs inspected as likely placement: `doc/USER.md` / `doc/session.md`, linked from `README.md`.
+- This bootstrap is the durable cross-session instruction. ChatGPT Memory cannot be directly written from this chat; do not assume this note has been saved to account Memory.
