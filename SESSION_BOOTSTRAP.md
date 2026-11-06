@@ -98,3 +98,22 @@ At last checkpoint `X11Libre/xserver:wip/xaverius` was still `eaff9a2fde04d84602
 - Inspect exact diffs and source, not commit titles or agent claims.
 - Record exact SHAs, tests, status, blockers.
 - If an actual tool or local environment is missing, state the limitation and use the durable mailbox fallback; never fabricate direct contact or background polling.
+
+## Update 2026-11-06 evening — Laforge branch discovered and audited
+
+- Newly visible branch: `mpbt-hq/starfleetctl:work/wormhole-manager-w0-017`, HEAD `94af3ab07b5188e6a994dd98c40a93c2365355da`.
+- Commit title claims completion of W0-017/W0-018/W0-024/W0-026, but owner rejects it as a non-accepted first draft. See W0-054 for exact findings and required correction sequence.
+- Major defects: bypasses `internal/comms.Bus` and real `Bus.PostExternal()`; local same-inbox rewrite instead of remote transport; no durable journal/idempotency/tombstones/fanout; second-based colliding IDs; unsafe manual JSON/path handling; fake in-process daemon with no worker process; non-atomic PID/state; weak YAML parser and inert config; no-op sync; no service/autostart; inadequate tests; requirement matrix overclaims.
+- W0-054: Laforge owner audit / real Comms integration correction.
+- W0-055: Enterprise must establish an actual Comms feedback loop to the project owner, send a targeted status update using configured recipient routing, report message ID, and leave a durable report. Do not guess the target. Enterprise remains coordination-only.
+- This ChatGPT tool session currently exposes GitHub repository actions but no direct local Starfleet Comms action or shell into the flagship workspace. Do not claim a direct Comms message was sent from this session. Enterprise has been explicitly asked to initiate the real Comms contact locally; until a message ID/acknowledgement is reported, the feedback loop is requested but not yet verified.
+
+## Latest known Wormhole mailbox state
+
+- W0-050 commit `6bf5bcfb8070ce26829bd8d6865ae414e891136a`
+- W0-051 commit `bfce7ad6ef6a63183c44b56f478d2559001b7d04`
+- W0-052 commit `eaecd53a16d78da6334d5d75036663b6966ff900`
+- W0-053 commit `aa6228802335d8b323890aebb2599a4dfa903e70`
+- W0-054 commit `1e39a5e20751ed61bfe8448c4a6865bd4e3f86db`
+- W0-055 commit `ea437911b5ec1721b148b08c186f379c47e559fe`
+- Bootstrap file first published at `e52db09ca64179df4f79e72ba3c2312d26e62d2b`; later updates supersede this SHA.
