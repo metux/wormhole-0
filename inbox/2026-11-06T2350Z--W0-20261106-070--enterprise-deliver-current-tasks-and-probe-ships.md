@@ -35,3 +35,7 @@ Current remote state to include in your next factual report:
 - Do not treat task publication or repository refresh as Comms delivery. For each actual delivery/probe, record real Comms IDs and correlated responses only.
 
 Continue the original W0-070 instructions unchanged: deliver W0-067/W0-068/W0-069 by Comms, perform observational-only liveness probes of existing Defiant and Laforge sessions, report exact process/worktree/branch/HEAD/dirty state and Comms correlation evidence. Never restart/relaunch/detach/duplicate a Console ship.
+
+## Owner clarification: delivery confirmation is mandatory evidence
+
+When delivering W0-067/W0-068/W0-069 through Comms, do not report mere send success as delivery. For every task message, obtain and record an explicit correlated recipient acknowledgement/receipt (original message ID, recipient ship ID, receipt message ID, UTC timestamp, and correlation/task ID). If the existing Comms path does not expose such a receipt, state **delivery unconfirmed** and report the exact limitation; do not invent IDs or infer receipt from GitHub publication. This is distinct from a liveness-probe reply and distinct from task completion. The durable Wormhole spool protocol now also requires a recipient-published delivery receipt back to the sender after pickup, as specified in `design-drafts/PER-SHIP-MAILDIR-SPOOLS.md` (commit `6843fed85f637741a0d1b95dcf60c72aab02687b`).
