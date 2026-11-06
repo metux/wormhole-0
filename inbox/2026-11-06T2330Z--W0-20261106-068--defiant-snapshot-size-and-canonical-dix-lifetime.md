@@ -34,3 +34,17 @@ Correction: newer commits DO exist. Current branch tip observed by owner: `e5aa9
 For every commit report parent and SHA, changed paths, exact build/test commands and outputs, and actual branch/HEAD/dirty state. A commit message saying "Build green" is not evidence. GitHub status/workflow results currently show no checks for `e5aa972`.
 
 No Stage 5, Screen/DDX integration, modesetting, Proc handlers, Vulkan backend, unrelated renames, formatting or broad refactors. Preserve the three designated headers and current code style. Do not wait for Enterprise.
+
+
+## 2026-11-07 owner re-audit of current branch tip
+
+Branch still points to `e5aa97207f03de941e4e44196c774c5608d1629c`; no newer commit is visible. I re-fetched the actual `Xext/xaverius/registry.c` and `xaverius_intern.h` from that branch. The following are still present:
+
+- `XaveriusRegistryObserveDevice()` around lines 708–760 references `registration->identity_evidence` and `registration->identity_evidence_size`, although its actual parameters are `identity_evidence` and `identity_evidence_size`. This remains a definite compile error.
+- The registration path's new length guard is incomplete: it conditionally performs identity lookup only for an exact-size evidence buffer, but later unconditionally casts any non-NULL `registration->identity_evidence` to `XaveriusDeviceIdentity *` when assigning `dev->identity`. Reject non-NULL evidence with any size other than exactly `sizeof(XaveriusDeviceIdentity)` before any cast/read. Also define and validate the absent-evidence case explicitly; do not silently interpret malformed evidence as a zero identity.
+- `XaveriusDeviceBackendOps.query_physical_snapshot` in `xaverius_intern.h` still has signature `XaveriusBackendResult (*query_physical_snapshot)(void *, void *)`; the call in `registry.c` returns only a pointer through `&dev->snapshot`, with no size output or owned-result contract. `dev->snapshot_size` remains initialized to zero and no size is assigned before validation/copy. This does not satisfy the normative immutable snapshot value contract.
+- `XaveriusPhysicalDeviceDIXDestroy()` still unlinks `dev->list`, decrements the canonical registry count, frees `dev->identity_evidence`, and frees `dev`. The comments claim canonical retention, but the code still destroys the canonical record. DIX resource-wrapper ownership and canonical PhysicalDevice lifetime must be separate.
+- `XaveriusRegistryInit()` still unconditionally reinitializes all global lists/counters. `XaveriusRegistryFini()` still only resets counters; it does not perform ordered registry cleanup or role/binding release.
+- The backend ops descriptor still uses a two-argument snapshot callback, whereas the normative addendum requires the versioned descriptor/callback ABI and deep-copied operation tables. Do not resolve this by an undocumented local ABI change: propose/record a normative spec amendment if required, then implement the agreed contract.
+
+Immediate order remains: (1) fix compile error and exact evidence validation, build; (2) settle snapshot ABI against normative spec and implement size/lifetime-safe snapshot ownership; (3) separate DIX wrapper lifetime from canonical registry record/tombstone; (4) implement guarded init and ordered fini. Small commits, tests and actual build logs for each. No Stage 5/DDX integration or broad refactor.
