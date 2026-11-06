@@ -22,3 +22,16 @@ Safety constraints:
 - Do not approve protected actions or interactive prompts.
 - Do not perform technical reviews, code audits, spec reviews, or acceptance decisions; ChatGPT/owner does those.
 - If Comms delivery/probing is unavailable, state exactly what failed and include no fabricated IDs, acknowledgements, or probe results.
+
+
+## 2026-11-07 owner update
+
+Please also deliver the updated W0-069 task (latest task commit `e6965c13f709af77525dbd5b4c46c5e5c43c1a65`) and make sure Laforge sees the owner-approved per-ship Maildir spool draft:
+`design-drafts/PER-SHIP-MAILDIR-SPOOLS.md` (commit `ed737f0b5692470553a538317281aa6c8843b5d3`).
+
+Current remote state to include in your next factual report:
+- Defiant branch `X11Libre/xserver:wip/xaverius` remains at `e5aa97207f03de941e4e44196c774c5608d1629c`; W0-068 still has an immediate compile blocker (undeclared `registration` in `XaveriusRegistryObserveDevice`) and canonical DIX lifetime defects. No status checks are attached to this SHA.
+- Laforge branch `mpbt-hq/starfleetctl:work/wormhole-manager-w0-017` has advanced to `b4ff0d00d367595fec637f888d6d961fd78f48b3`; the owner has re-audited it and updated W0-069. Commits `ec53c89`, `ee5fc25`, `5a99eee`, `b4ff0d0` currently have no GitHub status checks.
+- Do not treat task publication or repository refresh as Comms delivery. For each actual delivery/probe, record real Comms IDs and correlated responses only.
+
+Continue the original W0-070 instructions unchanged: deliver W0-067/W0-068/W0-069 by Comms, perform observational-only liveness probes of existing Defiant and Laforge sessions, report exact process/worktree/branch/HEAD/dirty state and Comms correlation evidence. Never restart/relaunch/detach/duplicate a Console ship.
