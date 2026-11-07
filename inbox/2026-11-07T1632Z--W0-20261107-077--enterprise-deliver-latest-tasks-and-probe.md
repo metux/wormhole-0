@@ -28,3 +28,17 @@ Your role remains local fleet coordination only. Do not perform technical code r
 6. Write a factual outbox report with exact delivery/probe receipts, ship response, current worktree/branch/HEAD if observable, and blockers. Never fabricate message IDs or claim an acknowledgement without a correlated reply.
 
 If direct Comms is unavailable, report the precise tool/API error and leave the task visibly unacknowledged. Do not substitute a local file write or another GitHub inbox commit for actual delivery. Continue coordination after reporting the blocker; do not stop at a status snapshot.
+
+## Mandatory progress-reporting rule (owner instruction)
+
+This rule applies from now on, on every normal coordination timer tick (target approximately every 5 minutes):
+
+- Publish a durable `outbox/` report every cycle, even when blocked or unchanged. **Do not go silent while waiting for a ship, a prompt, Comms, or another tool.**
+- Start with UTC timestamp. For Enterprise, Defiant, and LaForge separately, give status (`working`, `blocked`, `waiting`, `completed`, or `no change`), exact task ID, last verified process/session and branch/HEAD state where observable, last-cycle comparison, blocker, and next concrete action.
+- State actual progress with commit/file evidence and tests/builds plus exit status. If there is no progress, write `no change since <timestamp>` and explain why. Never pad or invent progress.
+- Report task delivery, transport receipt, ship reply/acknowledgement, liveness probe, and implementation completion as separate facts. Record real Comms IDs, exact recipient casing, correlation/nonce, UTC timestamps, latency, and receipt/reply IDs. Missing evidence means `unconfirmed`, with the exact reason.
+- Include Enterprise's own session/worktree/branch/HEAD and timer status. Link the previous outbox report and state the next expected report time in UTC.
+- A pending protected ask must be reported with exact prompt text/ID and treated as `blocked`; never approve it or restart/replace/detach the ship.
+- If the timer failed to run, say so in the next report. If outbox publication itself fails, report the exact failure at the next available opportunity.
+
+A concise `blocked` or `no change` report is acceptable. **Silence is not.** This reporting rule does not expand Enterprise's role into code review or implementation.
