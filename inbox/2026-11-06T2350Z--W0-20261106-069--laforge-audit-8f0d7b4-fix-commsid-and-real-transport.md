@@ -110,3 +110,22 @@ The branch advanced from `b4ff0d0` to `150c4154c8e47af89e2674b0c1a5921b45c50f63`
 8. **Delivery receipts:** implement the explicit correlated delivery-receipt requirement added to the spool design in commit `6843fed`. Do not equate PostExternal return, Git push, or Comms message creation with recipient acknowledgement. Task delivery confirmation requires a separately correlated receipt.
 
 Commit fixes separately and add tests for each crash/replay/error boundary. Report exact changed paths, tests/output, branch/HEAD/dirty state and remaining blockers. No broad rewrite.
+
+
+## Owner re-audit — current tip 150c415 (2026-11-07 08:45Z)
+
+Fresh fetch confirms branch remains `150c4154c8e47af89e2674b0c1a5921b45c50f63`; no newer commit.
+
+Correction to earlier audit: the double-allocation defect itself is fixed. `PostExternal()` reserves and persists a CommsID once (lines 379-387), and `publishExternalRecipientsLocked()` now uses the already-reserved ID. Do not continue claiming the helper overwrites it.
+
+A distinct crash window remains: `createExternalRecordLocked()` persists a new record before `nextID()` is called (lines 363-387). A crash/failure after record creation but before CommsID persistence leaves an existing record with empty CommsID. The existing-record resume path (lines 345-360) does not allocate/recover a missing ID before publishing. Fix by allocating only when empty on resume, persisting it before any recipient publication, and never replacing a non-empty ID. Add a test that simulates this exact crash boundary and reopens the Bus.
+
+Other exact current blockers reconfirmed:
+- `wormhole.go:100-107`: malformed YAML parse errors silently return defaults; lines 110-155 are a handwritten parser and repositories is a no-op.
+- `wormhole.go:280-299`: sync/process errors are discarded; lines 303-343 swallow per-message errors and retain the legacy local inbox scan.
+- `wormhole.go:345-360`: per-repository Sync errors are discarded and function returns nil.
+- `git_sync.go:92-142`: fetch/rebase/push only; no spool staging/commit before push.
+- `cli.go:74-77`: `runSync` only prints success and returns 0.
+- `launch.go:1192-1194`: actual OpenCode `question` permission is still denied only when launchType is not terminal. Console/terminal policy remains unfixed. Apply for every non-unrestricted launch type, preserve unrestricted; tests required. Never restart/relaunch/detach/duplicate existing Console ships.
+- No new CI/workflow evidence or tests were reported. No new commit since 150c415.
+Keep W0-069 open; do not claim end-to-end transport, daemon, or delivery receipts.
