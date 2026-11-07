@@ -153,3 +153,8 @@ Fresh GitHub refresh still shows `work/wormhole-manager-w0-017` at `150c4154c8e4
 Current `internal/comms/comms_external.go` blob `d098c42044c93fdcc6c79694ddc9be4a8d25721a`: the prior CommsID double-allocation correction remains present, but the crash window remains: a new record is persisted before CommsID reservation; an existing incomplete record resumes fanout without first recovering/persisting an empty CommsID. Replay also still needs immutable envelope validation beyond payload hash (including sender/target).
 
 Current `internal/wormhole/wormhole.go` blob `5fe1400359bbf048d8477eb42e3514aed613b0d8`: handwritten flat parser remains; malformed config silently falls back to defaults; repositories parsing remains a no-op. RunLoop and message processing still discard sync/read/parse/PostExternal errors and still scan legacy per-repository inbox directories. No approved per-ship Maildir spool transport or correlated receipt protocol is implemented in this branch. Keep W0-069 open; work in small commits and provide tests/build evidence.
+
+
+## Additional regression-test audit — 2026-11-07 11:00Z
+
+Current `internal/session/launch_test.go` blob `5fcc4a0fdb6f709e29595b30552bfdbf1067ca14` confirms the test suite codifies the wrong policy: `TestGenerateOpencodeConfigQuestionPermission` expects background/auto to deny, but explicitly expects terminal to have no `question` rule (lines 164-200). W0-067 must update this test so terminal, background, and auto all assert `question == "deny"`; unrestricted must continue to assert that no deny rule is generated. Also update misleading comments in the test and generator. No tests have been run by this audit; do not claim a passing result.
