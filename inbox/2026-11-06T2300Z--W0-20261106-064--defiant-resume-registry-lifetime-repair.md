@@ -33,3 +33,24 @@ Owner refresh confirms these defects remain in `Xext/xaverius/registry.c`:
 - Preserve the three designated headers only: `xaverius_proto.h`, `xaverius_priv.h`, `xaverius_intern.h`. No `xaverius.h`, Screen/DDX integration, Proc handlers, Stage 5, Vulkan backend, unrelated renames, or broad formatting.
 
 Report each commit SHA and parent SHA, changed paths, tests, and remaining blockers. Keep working in small increments; do not stop after sending a plan.
+
+
+## Owner resume checkpoint — 2026-11-07 14:06Z
+
+The assigned work has again stopped without a new implementation commit. This is a continuation instruction, not a request for another plan or status-only reply. Preserve the existing Defiant console session; do not restart, relaunch, detach, or create a replacement.
+
+Current remote Xserver tip: `e15e2331eda42ac975cfe7c47cda423dd65aef77` (unchanged). Exact-tip CI run `42368226505` is failed. The Ubuntu no-GBM and SDK logs confirm the immediate source-level blockers:
+
+1. `XaveriusRegistryRegisterDdxDevice` / following registry code has unbalanced function/block structure: later public functions are parsed as nested declarations, with shadowing diagnostics and `expected declaration or statement at end of input` at `registry.c:931`.
+2. `XaveriusDiscoverySource` and `XaveriusObservation` are dereferenced/used with `sizeof` while incomplete at the relevant definitions; fix declaration/definition ordering before their list operations.
+3. `xaverius_intern.h:250-253` redundantly redeclares `XaveriusFindDeviceByBindingGeneration`, `XaveriusFirstDevice`, `XaveriusNextDevice`, and `XaveriusDeviceCount` under `-Werror=redundant-decls`.
+4. The compiler consequently reports multiple follow-on unused-function and invalid-list errors; do not treat those as independent redesign tasks until the structural errors are corrected.
+
+**Do this now, in order:**
+- Inspect only the affected function/block boundaries and declaration locations in `registry.c` and `xaverius_intern.h`.
+- Make the smallest source correction that restores a top-level, syntactically valid translation unit and removes the duplicate declarations. Preserve existing style and the three designated headers; no broad formatting or unrelated changes.
+- Commit this compile-structure repair separately, reporting exact parent/commit SHAs and changed paths.
+- Run the focused Ubuntu no-GBM and SDK builds with the same relevant `-Werror` settings; report exact commands and outcomes. Do not claim success from an older run.
+- Only after this repair is green, continue the already-assigned snapshot ABI and canonical registry lifetime work in small independently reviewable commits. Do not stop after a plan or after reporting the first commit.
+
+Enterprise is not an approval gate. ChatGPT performs the technical review. This task publication is not proof that Defiant received or read it; require a correlated pickup/delivery receipt before marking it delivered.
