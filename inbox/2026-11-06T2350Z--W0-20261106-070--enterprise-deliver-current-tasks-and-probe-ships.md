@@ -68,3 +68,10 @@ Required actions:
 6. Coordinate the root-cause fix with Laforge: generated per-ship config must deny actual OpenCode `question` permission for every non-unrestricted launch type, including terminal/Console. This applies to the next normal owner-authorized launch unless a verified safe live-reload exists; never restart the current sessions to apply it.
 
 This incident is separate from technical code review. Enterprise reports evidence and coordinates; it does not approve code or protected actions.
+
+
+## Owner correction — 2026-11-07 10:58Z
+
+The branch-head statement in the prior owner update above was stale/incorrect. Fresh GitHub API refresh shows Laforge branch `mpbt-hq/starfleetctl:work/wormhole-manager-w0-017` is still at `150c4154c8e47af89e2674b0c1a5921b45c50f63`. `b4ff0d00d367595fec637f888d6d961fd78f48b3` is an ancestor commit, not the current branch head. Defiant remains at `e5aa97207f03de941e4e44196c774c5608d1629c`. No new Enterprise outbox report exists beyond W0-058/W0-059 from 2026-11-06 21:30Z. No Comms delivery IDs, correlated receipts, or current liveness probe results are available; do not claim delivery/probing.
+
+Current launch generator was independently fetched and still excludes terminal from the `question=deny` rule. Preserve all running Console sessions; no restart, detach, conversion, or replacement. Continue observational-only work and report exact evidence if Comms becomes available.
