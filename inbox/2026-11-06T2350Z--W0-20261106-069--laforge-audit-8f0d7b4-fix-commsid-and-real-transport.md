@@ -165,3 +165,14 @@ Current `internal/session/launch_test.go` blob `5fcc4a0fdb6f709e29595b30552bfdbf
 Fresh branch/PR refresh: `mpbt-hq/starfleetctl:work/wormhole-manager-w0-017` remains at `150c4154c8e47af89e2674b0c1a5921b45c50f63`; no new branch, no open PR, and no later commit is visible in the repository. Current `launch.go` still excludes `terminal` from `permission["question"]="deny"`. Current `launch_test.go` still explicitly expects terminal to have no question rule. Thus W0-067 remains unimplemented and untested; no rollout evidence. Do not restart running Console ships. No other work claimed by Laforge can be accepted without a branch/commit or independently inspectable worktree evidence.
 
 W0-069 other blockers from the prior audit remain: CommsID crash recovery for incomplete external records; immutable replay envelope validation; swallowed RunLoop/worker errors; handwritten config parser with silent defaults; legacy inbox rather than approved per-ship spool/new/cur; GitSync without spool stage/commit; process-global daemon ownership/recovery; no explicit correlated receipt acknowledgement. No evidence of implementation arrived in this refresh.
+
+
+## Owner refresh — 2026-11-07 12:53Z: new commits audited
+
+Fresh remote branch contains two new commits after 150c415: 7176d195d05b673bc79f868b00782eeee4de20f3 (daemon lifecycle integration) and 1e72cca3e2b5b53d95efbb18763ae2c826ddf9e2 (claimed Console question denial fix).
+
+The W0-067 commit is NOT a functional fix. Its entire launch.go diff changes comments only. The executable condition remains: if launchType != "terminal" && !unrestricted { permission["question"] = "deny" }. The test file remains unchanged and still explicitly expects terminal to have no question rule (TestGenerateOpencodeConfigQuestionPermission, lines 183–190). Console therefore remains ask-enabled in generated config. W0-067 is not complete and there is no rollout. Required: deny question for every non-unrestricted launch type; update terminal/background/auto tests; preserve unrestricted; run focused tests. Do not restart any existing Console process.
+
+The daemon lifecycle commit calls RunLoop from runStart, logs immediate and periodic sync/processing errors, and logs shutdown signals. It does not implement the approved per-ship Maildir spool/new/cur, sender-to-recipient publication, correlated delivery receipts, or crash-safe receipt state. RunLoop still logs errors and continues rather than returning/propagating failures. Do not call transport or end-to-end delivery complete.
+
+Current branch head: 1e72cca3e2b5b53d95efbb18763ae2c826ddf9e2. No open PR found. Continue with the small functional W0-067 fix first, then separately address daemon/transport defects. Enterprise delivery and receipt evidence remains absent.
