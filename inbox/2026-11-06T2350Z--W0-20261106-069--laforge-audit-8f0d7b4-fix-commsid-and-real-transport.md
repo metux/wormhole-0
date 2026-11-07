@@ -129,3 +129,18 @@ Other exact current blockers reconfirmed:
 - `launch.go:1192-1194`: actual OpenCode `question` permission is still denied only when launchType is not terminal. Console/terminal policy remains unfixed. Apply for every non-unrestricted launch type, preserve unrestricted; tests required. Never restart/relaunch/detach/duplicate existing Console ships.
 - No new CI/workflow evidence or tests were reported. No new commit since 150c415.
 Keep W0-069 open; do not claim end-to-end transport, daemon, or delivery receipts.
+
+
+## Urgent owner incident — Enterprise and Defiant blocked in interactive ask (2026-11-07)
+
+Owner reports that both Enterprise and Defiant have again become stuck waiting in the interactive `ask`/question path.
+
+Treat this as a live incident, not as a reason to restart or replace either ship:
+- Do NOT restart, relaunch, detach, convert, or duplicate either existing Console-attached process/session.
+- Do NOT approve or answer a protected ask automatically. Preserve the exact pending prompt and its prompt/request ID.
+- Enterprise must report, observationally, for both Enterprise and Defiant: ship/session identity, launch type, PID/process state, worktree, branch, HEAD, dirty state, exact pending tool name (actual OpenCode config key is `question`), exact prompt/request ID, when it became pending, and whether the process is otherwise responsive. Include Comms correlation/message IDs for the report and obtain an explicit receipt; do not infer delivery from GitHub publication.
+- Do not classify a timeout as a confirmed hang without process/session evidence. Do not create replacement processes.
+- Root cause correction remains in generated per-ship config: set `permission["question"] = "deny"` for every non-unrestricted launch type, including `terminal`/Console. Add a regression test for terminal and background, and preserve unrestricted behavior.
+- This config correction applies on the next normal owner-authorized launch unless a verified safe live-reload mechanism exists. Do not try to apply it by restarting either currently running ship.
+
+This incident does not authorize broad changes or bypasses. Keep both sessions intact and escalate exact prompt details to the owner.
