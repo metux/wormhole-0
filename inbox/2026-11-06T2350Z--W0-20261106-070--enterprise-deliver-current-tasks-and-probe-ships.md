@@ -39,3 +39,12 @@ Continue the original W0-070 instructions unchanged: deliver W0-067/W0-068/W0-06
 ## Owner clarification: delivery confirmation is mandatory evidence
 
 When delivering W0-067/W0-068/W0-069 through Comms, do not report mere send success as delivery. For every task message, obtain and record an explicit correlated recipient acknowledgement/receipt (original message ID, recipient ship ID, receipt message ID, UTC timestamp, and correlation/task ID). If the existing Comms path does not expose such a receipt, state **delivery unconfirmed** and report the exact limitation; do not invent IDs or infer receipt from GitHub publication. This is distinct from a liveness-probe reply and distinct from task completion. The durable Wormhole spool protocol now also requires a recipient-published delivery receipt back to the sender after pickup, as specified in `design-drafts/PER-SHIP-MAILDIR-SPOOLS.md` (commit `6843fed85f637741a0d1b95dcf60c72aab02687b`).
+
+
+## 2026-11-07 refresh
+
+Current remote branch heads are now:
+- Defiant: `X11Libre/xserver:wip/xaverius` = `e5aa97207f03de941e4e44196c774c5608d1629c` (unchanged; W0-068 refreshed with exact source blockers).
+- Laforge: `mpbt-hq/starfleetctl:work/wormhole-manager-w0-017` = `150c4154c8e47af89e2674b0c1a5921b45c50f63`. W0-069 was refreshed with the exact remaining CommsID crash window, replay identity, error propagation, YAML config, spool transport, daemon, console question and receipt requirements.
+
+Refresh both tasks from master before attempting Comms delivery. No newer Enterprise outbox report exists: the latest reports remain W0-058/W0-059 from 2026-11-06 21:30Z. Thus there is still no verified evidence of delivery of the current W0-067/068/069 tasks, no correlated delivery receipts, and no current observational liveness probe results. Do not claim otherwise. Continue the original observational-only requirements. Do not restart/relaunch/detach/duplicate any existing Console ship.
