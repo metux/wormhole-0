@@ -36,3 +36,8 @@ Do not wait for Enterprise.
 ## Owner refresh — 2026-11-07 12:53Z: claimed fix commit is comment-only
 
 Branch head is 1e72cca3e2b5b53d95efbb18763ae2c826ddf9e2. Its entire diff to internal/session/launch.go changes comments only; executable condition still excludes terminal: if launchType != "terminal" && !unrestricted. internal/session/launch_test.go remains unchanged and expects terminal to have no question rule. Thus the commit title “fix: opencode question denied for console ships too” is not supported by its code diff. W0-067 remains open. Make the actual one-line condition correction, update focused tests, run them, and report output. Do not restart/relaunch/detach/duplicate currently running Console sessions.
+
+
+## Owner closure — 2026-11-07
+
+**CLOSED / WITHDRAWN FROM LAFORGE SCOPE.** The owner implemented, merged, and bootstrapped this fix on `mpbt-hq/starfleetctl:master` in commit `908f42c0cf7187c6a34df2b94df88d965874963e`. Do not duplicate or cherry-pick this work on `work/wormhole-manager-w0-017`. The remaining W0-069 work is unaffected.
