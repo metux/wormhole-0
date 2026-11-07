@@ -53,3 +53,18 @@ Refresh both tasks from master before attempting Comms delivery. No newer Enterp
 ## Owner refresh — 2026-11-07 08:45Z
 
 Fresh branch refresh: Defiant `X11Libre/xserver:wip/xaverius` remains `e5aa97207f03de941e4e44196c774c5608d1629c`; Laforge `mpbt-hq/starfleetctl:work/wormhole-manager-w0-017` remains `150c4154c8e47af89e2674b0c1a5921b45c50f63`. No new Enterprise outbox report exists beyond the stale 2026-11-06 21:30Z reports. Therefore this turn has no verified task-delivery receipt, correlated Comms acknowledgement, or current liveness probe evidence. GitHub task publication is not proof of delivery. Continue observational coordination only; never restart/relaunch/duplicate console ships.
+
+
+## Urgent owner incident — Enterprise and Defiant blocked in interactive ask (2026-11-07)
+
+Owner reports that Enterprise and Defiant are again both stuck in the interactive ask/question path. This requires immediate observational triage and a durable report.
+
+Required actions:
+1. Inspect the already-running sessions only. Do NOT restart, relaunch, detach, convert, or duplicate either Console-attached ship. Do not spawn replacement instances.
+2. For each ship, report exact ship/session identity, launch type, PID/process state, worktree, branch, HEAD, dirty state, exact pending tool/prompt name and prompt/request ID, pending-since timestamp, and responsiveness evidence. Distinguish a pending prompt, slow response, timeout, and confirmed process hang.
+3. Preserve pending prompt state. Never auto-approve a protected action. Ask the owner for a decision only if the exact prompt and required decision are presented.
+4. Send the owner a durable report over Comms with a unique correlation ID. Record the original Comms message ID and the recipient's correlated delivery receipt ID/timestamp. If no receipt is available, explicitly report delivery unconfirmed.
+5. Continue observational liveness probes only; do not use probes as a reason to restart a ship.
+6. Coordinate the root-cause fix with Laforge: generated per-ship config must deny actual OpenCode `question` permission for every non-unrestricted launch type, including terminal/Console. This applies to the next normal owner-authorized launch unless a verified safe live-reload exists; never restart the current sessions to apply it.
+
+This incident is separate from technical code review. Enterprise reports evidence and coordinates; it does not approve code or protected actions.
