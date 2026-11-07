@@ -158,3 +158,10 @@ Current `internal/wormhole/wormhole.go` blob `5fe1400359bbf048d8477eb42e3514aed6
 ## Additional regression-test audit — 2026-11-07 11:00Z
 
 Current `internal/session/launch_test.go` blob `5fcc4a0fdb6f709e29595b30552bfdbf1067ca14` confirms the test suite codifies the wrong policy: `TestGenerateOpencodeConfigQuestionPermission` expects background/auto to deny, but explicitly expects terminal to have no `question` rule (lines 164-200). W0-067 must update this test so terminal, background, and auto all assert `question == "deny"`; unrestricted must continue to assert that no deny rule is generated. Also update misleading comments in the test and generator. No tests have been run by this audit; do not claim a passing result.
+ 
+
+## Owner refresh — 2026-11-07 11:35Z
+
+Fresh branch/PR refresh: `mpbt-hq/starfleetctl:work/wormhole-manager-w0-017` remains at `150c4154c8e47af89e2674b0c1a5921b45c50f63`; no new branch, no open PR, and no later commit is visible in the repository. Current `launch.go` still excludes `terminal` from `permission["question"]="deny"`. Current `launch_test.go` still explicitly expects terminal to have no question rule. Thus W0-067 remains unimplemented and untested; no rollout evidence. Do not restart running Console ships. No other work claimed by Laforge can be accepted without a branch/commit or independently inspectable worktree evidence.
+
+W0-069 other blockers from the prior audit remain: CommsID crash recovery for incomplete external records; immutable replay envelope validation; swallowed RunLoop/worker errors; handwritten config parser with silent defaults; legacy inbox rather than approved per-ship spool/new/cur; GitSync without spool stage/commit; process-global daemon ownership/recovery; no explicit correlated receipt acknowledgement. No evidence of implementation arrived in this refresh.
