@@ -85,3 +85,18 @@ Fresh Wormhole outbox listing still contains only W0-058 and W0-059, both timest
 ## Owner refresh — 2026-11-07 12:53Z
 
 Fresh branch refresh shows Laforge at 1e72cca3e2b5b53d95efbb18763ae2c826ddf9e2 (new commits 7176d195 and 1e72cca3). The latter is only a comment change; actual question permission condition and terminal regression test remain unchanged. Defiant remains at e15e2331eda42ac975cfe7c47cda423dd65aef77, whose current CI run has widespread build failures including SDK and Ubuntu. Enterprise outbox still contains only W0-058/W0-059 dated 2026-11-06 21:30Z. No fresh observational process report, Comms delivery ID, correlated receipt, or liveness probe result is available. Do not claim task delivery or probe completion. Existing Console processes remain untouched; no restart/detach/replacement/auto-approval.
+
+
+## Owner instruction — mandatory progress reporting cadence (2026-11-07)
+
+This is an explicit operating rule, not an optional reporting preference.
+
+1. On every normal coordination timer tick (target interval: 5 minutes), publish a fresh durable report in `outbox/`, even when there has been no progress. Do not wait for a task to finish and do not remain silent because a Comms operation is blocked.
+2. Each report must begin with a UTC timestamp and a concise status for each active workstream/ship: `working`, `blocked`, `waiting`, `completed`, or `no change`. State the exact current task ID, last verified branch/HEAD, and the concrete next action.
+3. For every in-progress task, report what changed since the previous report: commit SHA or file/path evidence, tests/builds actually run and exit status, and remaining blocker. If nothing changed, explicitly say `no change since <previous report timestamp>` and state why (e.g. waiting for a reply, protected ask pending, tool unavailable). Never invent progress.
+4. Report coordination activity separately from implementation progress. For Comms, record actual request/message IDs, recipient ship ID, correlation ID, UTC send time, response/receipt ID, UTC receipt time, and latency. If any field is unavailable, mark delivery/probe `unconfirmed` and name the exact missing capability/evidence. A GitHub commit or inbox file is not a Comms receipt.
+5. For each active ship (at minimum Defiant and LaForge), report the latest observational liveness result and exact evidence. A pending interactive prompt is a blocked state, not a reason to restart, replace, or silently skip the report. Preserve prompt text and ID; never auto-approve.
+6. Include Enterprise's own process/session/worktree/branch/HEAD state in every report. If Enterprise cannot publish to outbox or cannot send Comms, report that limitation in the next available durable channel; do not claim the cycle completed.
+7. Every report must link the prior report and identify the next expected report time (UTC). If the timer did not fire, state that explicitly at the next opportunity.
+
+**Silence is not an acceptable status.** A report stating `blocked`, `waiting`, or `no change` is valid and preferred over no report. This rule does not authorize restarts, replacement processes, auto-approval, technical review, or changes outside Enterprise's local-coordination role.
