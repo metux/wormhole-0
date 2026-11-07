@@ -62,3 +62,14 @@ No newer commit exists on `X11Libre/xserver:wip/xaverius`. Rechecked the exact c
 6. **Descriptor contract:** top-level and typed backend ops ownership/deep-copy and mandatory callback validation still need to match the normative versioned ABI. Keep the operation tables immutable and server-owned for the lifetime of the binding.
 
 Required order: (a) fix ObserveDevice compile error and exact evidence validation; build with the actual Xserver build command and provide captured output; (b) agree and implement snapshot ABI/ownership; (c) separate DIX wrapper from canonical record/tombstone; (d) guarded init and ordered fini. Small coherent commits, focused tests, exact build/test output. No Stage 5/DDX integration, broad refactor, or unrelated formatting. Do not claim build-green from a commit message; CI status checks for e5aa972 are empty.
+
+
+## Owner re-audit — unchanged current HEAD e5aa972 (2026-11-07 08:45Z)
+
+Fresh fetch confirms branch `wip/xaverius` still points to `e5aa97207f03de941e4e44196c774c5608d1629c`; no new commit. Exact current source findings remain unchanged:
+- `registry.c:708-760`: `XaveriusRegistryObserveDevice()` parameters are `identity_evidence` and `identity_evidence_size`, but lines 756-759 reference undeclared `registration->...`. Definite compile blocker.
+- `registry.c:516-534`: the copy path accepts arbitrary positive evidence sizes, then line 531 casts every non-NULL buffer to `XaveriusDeviceIdentity`. Validate exact size before copy/cast/read, or reject unsupported absent evidence according to the agreed identity contract.
+- `xaverius_intern.h:108-114`: snapshot callback remains `(void *, void *)`; `registry.c:541-542` supplies only `&dev->snapshot`. `snapshot_size` remains zero; no size/lifetime contract.
+- `registry.c:60-80`: DIX destructor removes list membership and frees identity evidence and `dev`; comments claiming canonical retention do not match executable behavior.
+- `registry.c:100-124`: init reinitializes globals unconditionally; fini only zeroes counters.
+No code/build/test evidence arrived. Keep task open. First commit must fix compile/evidence validation and provide actual build output; do not bundle unrelated work.
