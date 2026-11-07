@@ -144,3 +144,12 @@ Treat this as a live incident, not as a reason to restart or replace either ship
 - This config correction applies on the next normal owner-authorized launch unless a verified safe live-reload mechanism exists. Do not try to apply it by restarting either currently running ship.
 
 This incident does not authorize broad changes or bypasses. Keep both sessions intact and escalate exact prompt details to the owner.
+
+
+## Owner refresh — 2026-11-07 10:58Z (latest remote verification)
+
+Fresh GitHub refresh still shows `work/wormhole-manager-w0-017` at `150c4154c8e47af89e2674b0c1a5921b45c50f63`; no later commit exists on this branch. Current `internal/session/launch.go` blob is `5da1d6b9d2e39aa5c95594c38b3819328b40413d`; the generator still contains `if launchType != "terminal" && !unrestricted` followed by `permission["question"] = "deny"`. Terminal/Console remains ask-enabled. W0-067 remains the required isolated first commit; this is not implemented and not rolled out. Do not restart or replace existing Console sessions.
+
+Current `internal/comms/comms_external.go` blob `d098c42044c93fdcc6c79694ddc9be4a8d25721a`: the prior CommsID double-allocation correction remains present, but the crash window remains: a new record is persisted before CommsID reservation; an existing incomplete record resumes fanout without first recovering/persisting an empty CommsID. Replay also still needs immutable envelope validation beyond payload hash (including sender/target).
+
+Current `internal/wormhole/wormhole.go` blob `5fe1400359bbf048d8477eb42e3514aed613b0d8`: handwritten flat parser remains; malformed config silently falls back to defaults; repositories parsing remains a no-op. RunLoop and message processing still discard sync/read/parse/PostExternal errors and still scan legacy per-repository inbox directories. No approved per-ship Maildir spool transport or correlated receipt protocol is implemented in this branch. Keep W0-069 open; work in small commits and provide tests/build evidence.
