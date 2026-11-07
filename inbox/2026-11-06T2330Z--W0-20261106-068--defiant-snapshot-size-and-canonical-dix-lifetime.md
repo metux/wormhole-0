@@ -114,3 +114,14 @@ CI log details: SDK job `128390795796` reports incomplete/undefined DiscoverySou
 ### API clarification from authoritative spec
 
 The `owner_key` mismatch is not an invitation to add fields to `XaveriusDeviceBackendRegistration` or `XaveriusDeviceBackendBinding`. The current authoritative DDX API in `Xext/xaverius/xaverius_priv.h` has no such fields by design. Architecture §2.3 / lifetime addendum places the stable non-empty `owner_key` on `XaveriusModuleRoleDescriptor`; the server copies it into the ModuleRole control record. Binding preference is resolved against that owning ModuleRole. Fix the registry code to use the existing retained role's copied key, or propose a spec change first; do not silently alter the registration ABI.
+
+
+## Owner refresh — 2026-11-07 12:53Z: re-audit of e15e2331 CI and diff
+
+Current branch remains e15e2331eda42ac975cfe7c47cda423dd65aef77; no follow-up repair commit is visible. Workflow run 42368226505 has widespread failed builds: Ubuntu, SDK image, Gentoo, FreeBSD, OpenBSD, Arch, macOS, Solaris, RHEL, Alpine, Cygwin, MinGW and others fail; ABI check and dependency-image jobs succeed. NetBSD was still in progress at refresh. SDK job 128390795796 explicitly reports incomplete XaveriusObservation use throughout registry.c and an end-of-input parse error at line 931, confirming the duplicate-open-brace defect remains. Ubuntu job 128390736784 also failed during the build.
+
+The diff introduces an additional lifetime defect: XaveriusPhysicalDeviceDIXDestroy() claims it leaves the canonical record in the registry, but still frees dev->identity_evidence and dev->snapshot; XaveriusRegistryFini() later frees both again. The record can retain dangling pointers and teardown can double-free. This contradicts the wrapper-only destructor and is not an acceptable tombstone lifetime implementation.
+
+The diff still has two consecutive if (existing != NULL) openings at lines 460 and 470; replay dereferences binding->binding_generation before binding is allocated. It also references owner_key in registration/binding despite the authoritative API placing owner_key on ModuleRoleDescriptor. Actual compiler output confirms incomplete-type and parse failures. The “Build green with -Dwerror” commit message is contradicted by Actions.
+
+Keep W0-068 open. Next action: minimal compile-restoration commit, then verified Ubuntu/SDK -Werror builds; afterward fix replay and canonical-record lifetime separately. No broad refactor or Stage 5 work.
