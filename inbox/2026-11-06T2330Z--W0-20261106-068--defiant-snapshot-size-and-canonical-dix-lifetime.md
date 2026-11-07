@@ -109,3 +109,8 @@ Exact current source defects from blob `117ad2cfef28a7107c11a94fb5c085bf35fa77b5
 CI log details: SDK job `128390795796` reports incomplete/undefined DiscoverySource and Observation types in RegistryFini, undeclared `xaverius_observations` and observation count, missing owner_key fields, implicit declaration of `xaverius_find_device_by_identity`, and end-of-input parse error. The duplicate declarations in `xaverius_intern.h` remain warnings. This is a compiler-level regression in the new commit, not merely an unrelated environment failure.
 
 **Next work order:** first restore a syntactically and type-correct single translation unit in one small commit (duplicate if/braces, declaration ordering, API/header mismatch, ObserveDevice parameter reference); immediately run the exact Ubuntu/SDK `-Werror` builds. Then address replay semantics and the canonical DIX lifetime. Snapshot ABI and evidence validation remain separate blockers. Do not claim A-G complete or build-green. No Stage 5/DDX integration or broad refactor.
+
+
+### API clarification from authoritative spec
+
+The `owner_key` mismatch is not an invitation to add fields to `XaveriusDeviceBackendRegistration` or `XaveriusDeviceBackendBinding`. The current authoritative DDX API in `Xext/xaverius/xaverius_priv.h` has no such fields by design. Architecture §2.3 / lifetime addendum places the stable non-empty `owner_key` on `XaveriusModuleRoleDescriptor`; the server copies it into the ModuleRole control record. Binding preference is resolved against that owning ModuleRole. Fix the registry code to use the existing retained role's copied key, or propose a spec change first; do not silently alter the registration ABI.
