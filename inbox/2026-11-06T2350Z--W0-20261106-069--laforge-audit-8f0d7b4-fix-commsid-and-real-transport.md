@@ -176,3 +176,19 @@ The W0-067 commit is NOT a functional fix. Its entire launch.go diff changes com
 The daemon lifecycle commit calls RunLoop from runStart, logs immediate and periodic sync/processing errors, and logs shutdown signals. It does not implement the approved per-ship Maildir spool/new/cur, sender-to-recipient publication, correlated delivery receipts, or crash-safe receipt state. RunLoop still logs errors and continues rather than returning/propagating failures. Do not call transport or end-to-end delivery complete.
 
 Current branch head: 1e72cca3e2b5b53d95efbb18763ae2c826ddf9e2. No open PR found. Continue with the small functional W0-067 fix first, then separately address daemon/transport defects. Enterprise delivery and receipt evidence remains absent.
+
+
+## Owner update — 2026-11-07: W0-067 resolved outside this branch
+
+The console/terminal `question` permission fix has now been merged to `mpbt-hq/starfleetctl:master` and the fleet has been re-bootstrapped by the owner. The relevant merged commit is `908f42c0cf7187c6a34df2b94df88d965874963e` (`session: launch: don't allow ask for console ships`).
+
+**Withdraw section 3 (Console question policy) from this task and strike W0-067 from your remaining implementation scope.** Do not reimplement or cherry-pick that fix on this branch. The owner has handled the merge and bootstrap.
+
+Next required repository operation: rebase your existing `work/wormhole-manager-w0-017` branch onto the updated `master` at `908f42c0cf7187c6a34df2b94df88d965874963e`, resolve any conflicts without dropping your W0-017 work, run the focused tests, then publish the rewritten branch with **force-with-lease** (not an unconditional blind force push). Do not merge this branch. Report the pre-rebase and post-rebase HEADs, rebase result, push result, tests, and remaining blockers.
+
+At the time of this instruction, GitHub showed:
+- `master`: `908f42c0cf7187c6a34df2b94df88d965874963e`
+- `work/wormhole-manager-w0-017`: `1e72cca3e2b5b53d95efbb18763ae2c826ddf9e2`
+- branch comparison: work branch 9 commits ahead and 1 commit behind master (diverged); rebase is required.
+
+All other W0-069 requirements and blockers remain in force. This update does not authorize a broad rewrite, does not change the approved spool/receipt design, and does not imply that delivery receipts or transport are complete.
