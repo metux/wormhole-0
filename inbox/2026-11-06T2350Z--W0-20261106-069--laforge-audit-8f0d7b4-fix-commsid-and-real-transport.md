@@ -92,3 +92,21 @@ Implement this as a first-class protocol requirement, not merely an optional not
 - Add tests for missing/delayed receipt, duplicate/replayed receipt, crash between pickup and receipt publication, fanout partial receipt, wrong recipient/original ID, and sender-side validation. Never report delivery as confirmed without the fetched receipt evidence.
 
 Keep the implementation incremental: first produce a concrete Comms Bus/W0-026 integration plan for these receipts and the approved per-ship spool model; do not start a broad rewrite.
+
+
+## Owner re-audit — LaForge commit 150c4154 (2026-11-07)
+
+The branch advanced from `b4ff0d0` to `150c4154c8e47af89e2674b0c1a5921b45c50f63`. This is real progress: the double allocation inside `publishExternalRecipientsLocked` is removed, `validExternalKey` rejects `.` and `..`, and the worker now calls `PostExternal`. However, W0-069 remains open; the current commit does not complete or safely recover the path.
+
+### Blocking findings from exact current source
+
+1. **CommsID crash window:** a new external record is persisted *before* `CommsID` is allocated. If the process crashes after `createExternalRecordLocked` and before the subsequent ID reservation/save, retry loads a record with empty `CommsID` and enters the resume path. `publishExternalRecipientsLocked` now assumes the caller has already reserved an ID, so it can publish empty IDs. Fix by making record creation and ID reservation crash-safe: on resume, reserve exactly once only when `rec.CommsID == ""`, persist it before recipient publication, and never replace a non-empty ID. Test the crash boundary explicitly.
+2. **Replay identity validation:** the existing-record path verifies only payload hash. It must also reject mismatched `from` and `target` (and any other immutable envelope fields); otherwise the same source/externalID can be replayed with changed routing identity while silently reusing the old record.
+3. **Error propagation is still swallowed:** `RunLoop` comments “Log but continue” but has no logger and discards errors from `syncAllRepos`, `processPendingMessages`, and `PostExternal`. This can silently lose work while reporting no failure. Preserve per-message errors and return/report aggregate errors; sync failure must not be treated as successful cycle.
+4. **YAML repositories parsing is still absent:** `parseYAMLConfig` remains a handwritten flat parser. The `repositories` case is still only a comment (“handled by caller”), and `LoadConfig` silently falls back to defaults on malformed config. Use the project's actual YAML parser/config conventions, parse and validate repository entries, and fail closed on malformed/unknown settings.
+5. **Git sync is not yet the approved spool transport:** current `GitSync.Sync()` fetches/rebases/pushes but does not stage/commit the recipient spool changes. Worker path still scans legacy repository-local `inbox/*.md` rather than the owner-approved `spool/<recipient>/new/` and `cur/` model. Reconcile with `PER-SHIP-MAILDIR-SPOOLS.md`; do not add a separate outbox/global queue or bypass Comms Bus.
+6. **Daemon lifecycle remains same-process singleton:** `daemonInstance` remains global process state and does not implement an independently supervised daemon with inter-process lock/ownership/crash recovery. The recent `RunLoop(root, bus)` signature change does not solve that.
+7. **Console question policy remains open:** `generateOpencodeConfig` still sets `permission["question"]="deny"` only when `launchType != "terminal" && !unrestricted`. The owner requirement is to deny `question` for every non-unrestricted launch type, including terminal/console. Do not use an invented `ask` key. This affects next normal owner-authorized launch only; never restart/relaunch/detach/duplicate an existing Console ship.
+8. **Delivery receipts:** implement the explicit correlated delivery-receipt requirement added to the spool design in commit `6843fed`. Do not equate PostExternal return, Git push, or Comms message creation with recipient acknowledgement. Task delivery confirmation requires a separately correlated receipt.
+
+Commit fixes separately and add tests for each crash/replay/error boundary. Report exact changed paths, tests/output, branch/HEAD/dirty state and remaining blockers. No broad rewrite.
