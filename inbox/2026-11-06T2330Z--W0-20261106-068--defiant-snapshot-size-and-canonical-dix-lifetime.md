@@ -73,3 +73,10 @@ Fresh fetch confirms branch `wip/xaverius` still points to `e5aa97207f03de941e4e
 - `registry.c:60-80`: DIX destructor removes list membership and frees identity evidence and `dev`; comments claiming canonical retention do not match executable behavior.
 - `registry.c:100-124`: init reinitializes globals unconditionally; fini only zeroes counters.
 No code/build/test evidence arrived. Keep task open. First commit must fix compile/evidence validation and provide actual build output; do not bundle unrelated work.
+
+
+## Owner refresh — 2026-11-07 10:58Z
+
+Fresh fetch confirms `X11Libre/xserver:wip/xaverius` remains at `e5aa97207f03de941e4e44196c774c5608d1629c`. Current source blobs: `Xext/xaverius/registry.c` = `77ff067e84231e55c947b8bc367f3a6f66079a68`; `Xext/xaverius/xaverius_intern.h` = `be6e1a8547521a488d0e985ed48f490992133acd`.
+
+Reconfirmed exact blockers: `registry.c:756-759` references undeclared `registration->identity_evidence{,_size}` inside `XaveriusRegistryObserveDevice()`, whose actual parameters are `identity_evidence` and `identity_evidence_size`; this is a compile blocker. `XaveriusPhysicalDeviceDIXDestroy()` lines 60-79 still unlinks and frees the canonical `dev` and its identity evidence despite comments claiming canonical retention. `XaveriusRegistryInit()` still unconditionally resets global lists/counters, and `XaveriusRegistryFini()` only resets counters. Snapshot callback remains `(void *, void *)` with no size/result ownership contract; `snapshot_size` is not populated. No new code commit or CI status evidence exists. Keep W0-068 open and follow the previously specified ordered, small-commit repair sequence.
