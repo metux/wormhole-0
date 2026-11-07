@@ -80,3 +80,11 @@ No code/build/test evidence arrived. Keep task open. First commit must fix compi
 Fresh fetch confirms `X11Libre/xserver:wip/xaverius` remains at `e5aa97207f03de941e4e44196c774c5608d1629c`. Current source blobs: `Xext/xaverius/registry.c` = `77ff067e84231e55c947b8bc367f3a6f66079a68`; `Xext/xaverius/xaverius_intern.h` = `be6e1a8547521a488d0e985ed48f490992133acd`.
 
 Reconfirmed exact blockers: `registry.c:756-759` references undeclared `registration->identity_evidence{,_size}` inside `XaveriusRegistryObserveDevice()`, whose actual parameters are `identity_evidence` and `identity_evidence_size`; this is a compile blocker. `XaveriusPhysicalDeviceDIXDestroy()` lines 60-79 still unlinks and frees the canonical `dev` and its identity evidence despite comments claiming canonical retention. `XaveriusRegistryInit()` still unconditionally resets global lists/counters, and `XaveriusRegistryFini()` only resets counters. Snapshot callback remains `(void *, void *)` with no size/result ownership contract; `snapshot_size` is not populated. No new code commit or CI status evidence exists. Keep W0-068 open and follow the previously specified ordered, small-commit repair sequence.
+
+
+## CI evidence — 2026-11-07 10:59Z
+
+The current HEAD `e5aa97207f03de941e4e44196c774c5608d1629c` has 25 GitHub Actions check runs. The Ubuntu build job `128204529534` failed; its captured log reports:
+- `Xext/xaverius/registry.c:756:9: error: ‘registration’ undeclared` at the exact ObserveDevice reference already identified above.
+- `Xext/xaverius/registry.c:175:1: error: ‘xaverius_identity_compare’ defined but not used [-Werror=unused-function]`.
+The SDK-image build job `128204669649` also failed and its log shows a duplicate `XaveriusDeviceCount` declaration warning in `xaverius_intern.h` (lines 247 and 253); its build stops in the same Xaverius compilation. The Xserver checks are therefore not merely absent: the actual current workflow has widespread failed build jobs. Fix the compiler errors first, then rerun the supported build matrix and provide successful evidence. Do not describe this HEAD as build-green.
