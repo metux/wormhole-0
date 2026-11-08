@@ -38,7 +38,7 @@ Update allKnownKeys to exactly match the simplified schema. Add regression tests
 ### 2. Replace the old inbox scanner with the fixed Maildir importer
 
 At the inspected HEAD, processPendingMessages() still scans:
-.star­fleet-ai/var/wormholes/<repoID>/inbox/*.md
+.starfleet-ai/var/wormholes/<repoID>/inbox/*.md
 
 It calls Bus.PostExternal(), which is the correct Comms boundary, but it does not implement the approved fixed remote spool:
 mail/<target-ship>/new/
@@ -53,7 +53,7 @@ Use stable source identity and immutable message ID for PostExternal. Replays mu
 ### 3. Audit and eliminate direct Comms-record writers
 
 internal/wormhole/messages.go still exports RouteMessage(), which writes directly to:
-.star­fleet-ai/var/comms/msgs/<ship>/unseen/
+.starfleet-ai/var/comms/msgs/<ship>/unseen/
 
 That bypasses Bus.PostExternal and violates the approved ownership boundary if it is reachable. Search all call sites and tests. Remove the bypass or refactor every relevant path to use the Comms API. Do not leave an alternate writer that can be accidentally reused. If a legacy function is intentionally retained for compatibility, demonstrate that it is not used by Wormhole transport and document why it is safe; prefer removal if there are no required callers.
 
