@@ -1,16 +1,21 @@
 # Starfleet Wormhole
 
-A lightweight, Git-based communication channel between the repository owner, ChatGPT, and the Starfleetctl fleet.
+A lightweight, Git-based transport spool for Comms messages between the repository owner, ChatGPT endpoints, and the Starfleetctl fleet.
 
 ## Start here
 
-- [Collaboration protocol](COLLABORATION.md) — directory layout, message format, and operating rules.
+- [Collaboration protocol](COLLABORATION.md) — active Maildir transport layout and operating rules.
+- [Mail spool](mail/README.md) — active transport and migration boundary.
 - [Decisions](decisions/) — durable agreements that apply across messages.
-- [Inbox](inbox/) — requests and instructions sent to the fleet.
-- [Outbox](outbox/) — replies and hand-offs from the fleet.
+
+## Historical manual mailbox
+
+The top-level `inbox/` and `outbox/` directories contain messages from the former manual collaboration workflow. They are **frozen historical archives**.
+
+They were deliberately not copied into the active Maildir and must never be replayed or automatically injected into Comms. Keep their files and Git history intact for reference. The Starfleetctl Wormhole manager does not read these directories.
 
 ## System boundaries
 
-Starfleetctl remains authoritative for task tracking, dashboard state, agent execution, and its normal report workflow. This repository carries cross-system messages and durable coordination decisions; it must not become a parallel task tracker or report archive.
+Comms is the only messaging system exposed to agents. This repository provides the Git transport spool; received messages enter the local Comms bus through its external-ingestion API. Starfleetctl remains authoritative for task tracking, dashboard state, agent execution, and normal reports.
 
 Use the default branch, `master`, unless the owner explicitly says otherwise.
