@@ -1,0 +1,5 @@
+message: w0-20261113T1000Z-chatgpt-voyager-post-restart.failed-1794559658118247389.md
+mailbox: Voyager
+from: new
+failed_at: 2026-11-13T08:47:38Z
+reason: invalid or missing message id ""
