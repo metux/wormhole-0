@@ -1,0 +1,5 @@
+message: w0-20261113T1000Z-chatgpt-enterprise-post-restart.md
+mailbox: Enterprise
+from: new
+failed_at: 2026-11-13T08:47:33Z
+reason: invalid or missing message id ""
