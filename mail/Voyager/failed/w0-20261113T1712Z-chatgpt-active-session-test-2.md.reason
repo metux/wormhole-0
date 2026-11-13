@@ -1,0 +1,5 @@
+message: w0-20261113T1712Z-chatgpt-active-session-test-2.md
+mailbox: Voyager
+from: new
+failed_at: 2026-11-13T16:27:43Z
+reason: message must start with '---' front matter delimiter
