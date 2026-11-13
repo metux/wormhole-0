@@ -1,0 +1,5 @@
+message: w0-20261113T191000Z-chatgpt-restart-xl-background-ships.md
+mailbox: Enterprise
+from: new
+failed_at: 2026-11-13T19:12:55Z
+reason: message id "w0-20261113T191000Z-chatgpt-enterprise-restart-xl-background" does not match file name "w0-20261113T191000Z-chatgpt-restart-xl-background-ships.md"
