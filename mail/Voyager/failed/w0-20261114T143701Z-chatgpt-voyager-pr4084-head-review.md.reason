@@ -1,0 +1,6 @@
+message: w0-20261114T143701Z-chatgpt-voyager-pr4084-head-review.md
+mailbox: Voyager
+from: new
+failed_at: 2026-11-14T13:37:23Z
+reason: invalid message front matter: yaml: unmarshal errors:
+  line 6: field task_id not found in type wormhole.Message
