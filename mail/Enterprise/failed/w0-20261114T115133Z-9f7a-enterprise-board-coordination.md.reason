@@ -1,0 +1,5 @@
+message: w0-20261114T115133Z-9f7a-enterprise-board-coordination.md
+mailbox: Enterprise
+from: new
+failed_at: 2026-11-14T11:50:45Z
+reason: invalid message front matter: yaml: line 4: mapping values are not allowed in this context
