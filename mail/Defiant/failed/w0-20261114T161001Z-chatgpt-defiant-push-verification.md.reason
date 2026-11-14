@@ -1,0 +1,6 @@
+message: w0-20261114T161001Z-chatgpt-defiant-push-verification.md
+mailbox: Defiant
+from: new
+failed_at: 2026-11-14T15:12:44Z
+reason: invalid message front matter: yaml: unmarshal errors:
+  line 7: mapping key "type" already defined at line 5
