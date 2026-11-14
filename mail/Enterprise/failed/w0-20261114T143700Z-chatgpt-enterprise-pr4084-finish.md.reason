@@ -1,0 +1,6 @@
+message: w0-20261114T143700Z-chatgpt-enterprise-pr4084-finish.md
+mailbox: Enterprise
+from: new
+failed_at: 2026-11-14T13:37:18Z
+reason: invalid message front matter: yaml: unmarshal errors:
+  line 6: field task_id not found in type wormhole.Message
