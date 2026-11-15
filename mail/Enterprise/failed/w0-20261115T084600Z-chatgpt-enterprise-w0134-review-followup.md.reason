@@ -1,0 +1,6 @@
+message: w0-20261115T084600Z-chatgpt-enterprise-w0134-review-followup.md
+mailbox: Enterprise
+from: new
+failed_at: 2026-11-15T08:51:47Z
+reason: invalid message front matter: yaml: unmarshal errors:
+  line 7: field correlation_id not found in type wormhole.Message
