@@ -1,0 +1,5 @@
+message: w0-20261116Tclarification-work-tmp-policy.md
+mailbox: Voyager
+from: new
+failed_at: 2026-11-16T13:30:05Z
+reason: message must start with '---' front matter delimiter
