@@ -1,0 +1,6 @@
+message: w0-20261116T143000Z-chatgpt-voyager-rfc-252-backport-audit.md
+mailbox: Voyager
+from: new
+failed_at: 2026-11-16T14:01:51Z
+reason: invalid message front matter: yaml: unmarshal errors:
+  line 6: field correlation_id not found in type wormhole.Message
