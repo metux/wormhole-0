@@ -36,7 +36,7 @@ Snapshot: 2026-11-17. Companion matrix: [xorg-server-cve-matrix.md](./xorg-serve
 
 ## P1 — resolve pipeline PRs and validate merged fixes
 
-8. **XRes PRs appear redundant:** [#4141](https://github.com/X11Libre/xserver/pull/4141) (25.1) and [#4153](https://github.com/X11Libre/xserver/pull/4153) (25.2) remain open, but current target source already has the safe 64-bit arithmetic. Re-check exact diff against current target heads, then close as obsolete if confirmed. Do not take their unrelated XRes restructuring.
+8. **XRes PR disposition:** [#4141](https://github.com/X11Libre/xserver/pull/4141) (25.1) and [#4153](https://github.com/X11Libre/xserver/pull/4153) (25.2) need exact-head rechecks before disposition. [#4169](https://github.com/X11Libre/xserver/pull/4169) (master, CVE-2026-109094) is rejected as submitted: its diff rewrites large parts of `Xext/xres/xres.c` (dispatch, reply serialization, client/resource handling, fragment management and includes) for a narrowly scoped request-size issue. Current master source blob `d891685e` already uses `uint64_t` in the `REQUEST_FIXED_SIZE` multiplication. Do not merge or salvage the old patch. Voyager is assigned to re-check the exact swapped path and advisory, then create a completely fresh, minimal fix/test PR only if a concrete defect remains. The old PR should be closed as obsolete once the replacement or no-fix conclusion is documented.
 
 9. **CVE-2026-109093 tests:** test high `firstValuator`, `numAxes` equality boundary, `MAX_VALUATORS` overflow, multiple DeviceValuator records, and both swapped/normal requests. Verify valid last-axis boundary still works.
 
