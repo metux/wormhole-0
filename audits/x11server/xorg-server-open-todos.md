@@ -1,6 +1,6 @@
 # X.Org Server security audit — open TODOs
 
-Snapshot: 2026-11-17. Companion matrix: [xorg-server-cve-matrix.md](./xorg-server-cve-matrix.md).
+Snapshot: 2026-11-17. Companion matrix: [xorg-server-cve-matrix.md](./xorg-server-cve-matrix.md). Wiki publishing plan: [xorg-server-cve-wiki-publishing.md](./xorg-server-cve-wiki-publishing.md).
 
 ## P0 — close currently confirmed exposure
 
@@ -53,14 +53,16 @@ Snapshot: 2026-11-17. Companion matrix: [xorg-server-cve-matrix.md](./xorg-serve
 13. Complete individual CVE-to-PR mapping and regression-test coverage for the April/June/July 2026 advisory groups. June's DRI2 variant must remain a separate row.
 14. Continue the advisory inventory back through 2024 and earlier. Include only X.Org server advisories in this repository scope; keep libX11/libXi/libXpm/libXrender/libXtst/libXfont2 advisories in a separate client-library audit.
 
-## P3 — make the audit machinery reliable
+## P3 — publishing and process reliability
 
-15. Repair the failed Voyager CVE audit task envelope before retrying. The previous message failed because the YAML `subject` contained an unquoted colon:
+15. **Publish the matrix to the X11Libre GitHub Wiki.** The dedicated plan is [xorg-server-cve-wiki-publishing.md](./xorg-server-cve-wiki-publishing.md). This is queued as a follow-on task for Voyager's existing session, after its current M1 assignment reaches explicit `task_done`. The task must clone `X11Libre/xserver.wiki.git` as a separate project, inspect for an existing matrix page, update rather than duplicate, push normally (no force-push), and verify the remote commit and rendered page. The current Wormhole matrix is incomplete historically; the Wiki must state coverage gaps rather than overclaim completeness.
+
+16. Repair the failed Voyager CVE audit task envelope before retrying. The previous message failed because the YAML `subject` contained an unquoted colon:
     `subject: X11Libre: CVE-first audit...`
     Quote the value (or avoid the colon), validate front matter before publishing, then verify receipt/processing in `mail/Voyager/{new,cur,processed,failed}`. The failed message is archived at [failed task](https://github.com/metux/wormhole-0/blob/master/mail/Voyager/failed/w0-20261116T193000Z-voyager-x11libre-cve-backport-audit-01.md) and [failure reason](https://github.com/metux/wormhole-0/blob/master/mail/Voyager/failed/w0-20261116T193000Z-voyager-x11libre-cve-backport-audit-01.md.reason).
-16. Require explicit `task_progress` and terminal `task_done(completed|blocked|yielded)`; do not infer completion from a pushed commit, message delivery, or a processed marker alone.
-17. Record tested HEAD, exact commands, full exit status/output, and CI run links for every security fix. Distinguish source inspection, unit/regression tests, sanitizer/reproducer tests, and CI.
-18. Keep the role boundaries: Defiant = Xaverius; Discovery = Starfleetctl; Voyager = assigned X11Libre audit/backport work only when explicitly dispatched; Enterprise = coordination/Comms, not technical audit. Do not create duplicate ship sessions or restart existing console ships.
+17. Require explicit `task_progress` and terminal `task_done(completed|blocked|yielded)`; do not infer completion from a pushed commit, message delivery, or a processed marker alone.
+18. Record tested HEAD, exact commands, full exit status/output, and CI run links for every security fix. Distinguish source inspection, unit/regression tests, sanitizer/reproducer tests, and CI.
+19. Keep the role boundaries: Defiant = Xaverius; Discovery = Starfleetctl; Voyager = assigned X11Libre audit/backport work only when explicitly dispatched; Enterprise = coordination/Comms, not technical audit. Do not create duplicate ship sessions or restart existing console ships.
 
 ## Acceptance criteria for calling this audit complete
 
