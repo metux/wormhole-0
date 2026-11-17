@@ -7,7 +7,7 @@ created: 2026-11-17T12:00:00Z
 type: task
 ---
 
-This is a **follow-on task** for your existing session only. Do not begin until your current M1 outbox assignment has reached an explicit terminal `task_done`. Do not create, restart, or duplicate any ship/session. Send `task_progress` when this task actually starts.
+This is a **follow-on task** for your existing session only. Do not begin until the M1 outbox assignment and the separate PR #4169 redo task have each reached an explicit terminal `task_done`. Do not create, restart, or duplicate any ship/session. Send `task_progress` when this task actually starts.
 
 The full durable plan is in Wormhole:
 [audits/x11server/xorg-server-cve-wiki-publishing.md](https://github.com/metux/wormhole-0/blob/master/audits/x11server/xorg-server-cve-wiki-publishing.md)
