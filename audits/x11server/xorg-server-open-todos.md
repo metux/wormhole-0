@@ -34,9 +34,22 @@ Snapshot: 2026-11-17. Companion matrix: [xorg-server-cve-matrix.md](./xorg-serve
    - Backport the safe allocation sizing from master commit [c03bc789](https://github.com/X11Libre/xserver/commit/c03bc789aed3fdf72af0bf0d2ec0d3cf073ecdf8).
    - Inspect the older DRI2 implementations in 25.0/25.1 separately; their source layout differs, so do not infer their status from 25.2.
 
+
+## P0 — prepare missing target-branch fixes
+
+19. **Prepare and validate missing-branch CVE fixes.** Temporary reference hunks and porting notes are in [patch templates](./patch-templates/2026-11-open-branches.md). These are not approved patches and must not be applied blindly. Priority targets:
+    - [CVE-2026-109091](https://github.com/X11Libre/xserver/issues/4132): master has no fix PR; sibling release fixes are merged (#4120/#4144/#4155).
+    - [CVE-2026-109092](https://github.com/X11Libre/xserver/issues/4133): master and 25.2 have no fix PR; #4118/#4143 merged to 25.0/25.1.
+    - [CVE-2026-109093](https://github.com/X11Libre/xserver/issues/4134): master has no fix PR; #4142/#4161 are open but unsuitable; #4116 merged to 25.0 and needs exact revalidation.
+    - [CVE-2026-109096](https://github.com/X11Libre/xserver/issues/4137) and [CVE-2026-109903](https://github.com/X11Libre/xserver/issues/4138): master and 25.2 have no fix PR; merged 25.0/25.1 patches are templates only.
+    - CVE-2026-93536: master/25.2 still need source recheck and likely port of #3893; verify current WindowGone refactor first.
+    - CVE-2026-50263 DRI2 variant: 25.2 requires source recheck and likely port of master commit c03bc789; test exact 11-attachment boundary.
+20. For every target above, first verify exact branch HEAD and current code. Only then prepare a minimal patch and focused regression test. Report per-branch PR state as merged/open/unmerged; do not treat an open PR as a fix.
+21. Keep 2025 CVE-26597/-26599 and older branch coverage in the historical audit queue; do not create speculative fixes until the branch-level source is checked.
+
 ## P1 — resolve pipeline PRs and validate merged fixes
 
-8. **XRes PR disposition:** [#4141](https://github.com/X11Libre/xserver/pull/4141) (25.1) and [#4153](https://github.com/X11Libre/xserver/pull/4153) (25.2) need exact-head rechecks before disposition. [#4169](https://github.com/X11Libre/xserver/pull/4169) (master, CVE-2026-109094) is rejected as submitted: its diff rewrites large parts of `Xext/xres/xres.c` (dispatch, reply serialization, client/resource handling, fragment management and includes) for a narrowly scoped request-size issue. Current master source blob `d891685e` already uses `uint64_t` in the `REQUEST_FIXED_SIZE` multiplication. Do not merge or salvage the old patch. Voyager is assigned to re-check the exact swapped path and advisory, then create a completely fresh, minimal fix/test PR only if a concrete defect remains. The old PR should be closed as obsolete once the replacement or no-fix conclusion is documented.
+8. **XRes CVE-2026-109094 disposition:** [#4169](https://github.com/X11Libre/xserver/pull/4169) (master) is open/unmerged but obsolete: exact current-master inspection shows the old separate swapped handler was removed by the shared-dispatch refactor. `ResExtensionInit()` registers `ProcResDispatch` for normal and swapped requests; `ProcXResQueryResourceBytes()` validates with a `uint64_t` size expression before swapping specs. Do not merge or salvage #4169; close it as obsolete after owner confirmation. [#4168](https://github.com/X11Libre/xserver/pull/4168) is a separate open test-only PR and should be reviewed independently. Existing ticket [#4135](https://github.com/X11Libre/xserver/issues/4135). Full evidence: [master recheck](./cve-2026-109094-master-recheck.md). [#4141](https://github.com/X11Libre/xserver/pull/4141) (25.1) and [#4153](https://github.com/X11Libre/xserver/pull/4153) (25.2) remain open/unmerged; verify those branch sources separately before deciding whether they still need fixes.
 
 9. **CVE-2026-109093 tests:** test high `firstValuator`, `numAxes` equality boundary, `MAX_VALUATORS` overflow, multiple DeviceValuator records, and both swapped/normal requests. Verify valid last-axis boundary still works.
 
