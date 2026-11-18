@@ -1,6 +1,18 @@
 # X.Org Server security audit — open TODOs
 
-Snapshot: 2026-11-17. Companion matrix: [xorg-server-cve-matrix.md](./xorg-server-cve-matrix.md). Wiki publishing plan: [xorg-server-cve-wiki-publishing.md](./xorg-server-cve-wiki-publishing.md).
+Snapshot: 2026-11-18. Companion matrix: [xorg-server-cve-matrix.md](./xorg-server-cve-matrix.md). Wiki publishing plan: [xorg-server-cve-wiki-publishing.md](./xorg-server-cve-wiki-publishing.md).
+
+## Newly queued — 2026-11-18
+
+1. **Backport [#4040](https://github.com/X11Libre/xserver/pull/4040) — undefined signed left shift in framebuffer line drawing.**
+   - Check the exact current source in `release/25.0`, `release/25.1`, and `release/25.2`.
+   - If the vulnerable expression remains, create one minimal PR per affected branch, with focused regression coverage where practical.
+   - Do not assume the master merge is present in any release branch.
+
+2. **Repository-wide C undefined-behavior scan.**
+   - Scan the current Xserver code and maintained release branches for patterns similar to #4040: left/right shifts of negative signed values, shift counts outside operand width, signed overflow, unsafe signed/unsigned conversions, and related integer UB.
+   - Distinguish genuine reachable bugs from benign patterns; verify each candidate against the exact target branch and existing refactors.
+   - Record evidence and prioritize minimal fixes plus regression tests. Do not perform broad cleanup as part of this scan.
 
 ## P0 — close currently confirmed exposure
 
