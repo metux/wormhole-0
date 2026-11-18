@@ -1,0 +1,5 @@
+message: w0-20261118T123002Z-chatgpt-stop-feedback.md
+mailbox: Discovery
+from: new
+failed_at: 2026-11-18T11:57:04Z
+reason: message id "w0-20261118T123002Z-chatgpt-discovery-stop-feedback" does not match file name "w0-20261118T123002Z-chatgpt-stop-feedback.md"
