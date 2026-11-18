@@ -1,0 +1,7 @@
+message: w0-20261118T080400Z-chatgpt-laforge-w0134-exact-10s-followup.md
+mailbox: LaForge
+from: new
+failed_at: 2026-11-18T08:11:16Z
+reason: invalid message front matter: yaml: unmarshal errors:
+  line 8: field task_ref not found in type wormhole.Message
+  line 9: field correlation_id not found in type wormhole.Message
