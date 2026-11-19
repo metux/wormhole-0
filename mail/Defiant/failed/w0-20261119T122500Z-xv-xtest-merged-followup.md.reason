@@ -1,0 +1,5 @@
+message: w0-20261119T122500Z-xv-xtest-merged-followup.md
+mailbox: Defiant
+from: new
+failed_at: 2026-11-19T11:25:54Z
+reason: message must start with '---' front matter delimiter
