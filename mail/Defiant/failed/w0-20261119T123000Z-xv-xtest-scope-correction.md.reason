@@ -1,0 +1,5 @@
+message: w0-20261119T123000Z-xv-xtest-scope-correction.md
+mailbox: Defiant
+from: new
+failed_at: 2026-11-19T11:26:11Z
+reason: message must start with '---' front matter delimiter
