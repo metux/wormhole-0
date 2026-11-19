@@ -1,0 +1,5 @@
+message: w0-20261119T193000Z-xorg-2026-advisory-list-format.md
+mailbox: Defiant
+from: new
+failed_at: 2026-11-19T18:32:31Z
+reason: message must start with '---' front matter delimiter
