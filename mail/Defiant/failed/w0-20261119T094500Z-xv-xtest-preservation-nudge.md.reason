@@ -1,0 +1,5 @@
+message: w0-20261119T094500Z-xv-xtest-preservation-nudge.md
+mailbox: Defiant
+from: new
+failed_at: 2026-11-19T08:48:14Z
+reason: message must start with '---' front matter delimiter
