@@ -1,99 +1,86 @@
 # X.Org Server security audit — open TODOs
 
-Snapshot: 2026-11-18. Companion matrix: [xorg-server-cve-matrix.md](./xorg-server-cve-matrix.md). Wiki publishing plan: [xorg-server-cve-wiki-publishing.md](./xorg-server-cve-wiki-publishing.md).
+Snapshot: 2026-11-19. Status index: [xorg-server-cve-matrix.md](./xorg-server-cve-matrix.md). Wiki publishing plan: [xorg-server-cve-wiki-publishing.md](./xorg-server-cve-wiki-publishing.md).
 
-## Newly queued — 2026-11-18
+## Current branch tips
 
-1. **Backport [#4040](https://github.com/X11Libre/xserver/pull/4040) — undefined signed left shift in framebuffer line drawing.**
-   - Check the exact current source in `release/25.0`, `release/25.1`, and `release/25.2`.
-   - If the vulnerable expression remains, create one minimal PR per affected branch, with focused regression coverage where practical.
-   - Do not assume the master merge is present in any release branch.
+| Branch | HEAD |
+|---|---|
+| master | 168e55f3d18a45e93921c6ffc155d954fb98673d |
+| release/25.0 | c926955b948f7311e8f21c33fec8f7ffcf704252 |
+| release/25.1 | 32c7f7b54bd9723dc3dbb79bb23ba20bc0269222 |
+| release/25.2 | a10ba82d33f50729d3a9785801d7cd6e65b12b21 |
+
+## Current exposure / branch work
+
+1. **CVE-2026-109092 — XvShmPutImage, release/25.2.**
+   - Master fix is merged as [#4171](https://github.com/X11Libre/xserver/pull/4171); active implementation is in Xext/xv/xvdisp.c, SingleXvShmPutImage().
+   - Release/25.1 [#4143](https://github.com/X11Libre/xserver/pull/4143) and release/25.0 [#4118](https://github.com/X11Libre/xserver/pull/4118) are merged.
+   - Release/25.2 still uses the unsafe size-plus-offset check. Prepare a focused backport with safe ordering: reject negative size, reject offset beyond segment size, then compare size against the remaining segment length. Avoid addition before bounds validation.
+   - Earlier review of #4171 verified the int / unsigned long / CARD32 arithmetic and guard ordering. Build X servers run [44435763792](https://github.com/X11Libre/xserver/actions/runs/44435763792) succeeded.
+
+2. **CVE-2026-109903 — XvQueryImageAttributes, release/25.2.**
+   - Master fix [#4184](https://github.com/X11Libre/xserver/pull/4184) is merged.
+   - Release/25.1 [#4150](https://github.com/X11Libre/xserver/pull/4150) is merged; follow-up [#4187](https://github.com/X11Libre/xserver/pull/4187) fixes the rpcbuf ownership error in its error path.
+   - Release/25.0 [#4127](https://github.com/X11Libre/xserver/pull/4127) is merged.
+   - The release/25.2 implementation still needs the negative-size guard before constructing the reply / reserving or writing reply data. Prepare a branch-specific backport; do not assume master or sibling release merges are present.
+
+3. **CVE-2026-109094 — XRes QueryResourceBytes swap path.**
+   - Master is **N/A**: the shared request-dispatch / request-field validation path makes the vulnerable swapped-handler path inapplicable on current master. This is an independent code-path change, not a fix PR; leave [#4169](https://github.com/X11Libre/xserver/pull/4169) unmerged and disposition it as obsolete after confirming with its owner.
+   - Release/25.2 [#4153](https://github.com/X11Libre/xserver/pull/4153) and release/25.1 [#4141](https://github.com/X11Libre/xserver/pull/4141) remain open. Verify each against its exact branch tip and review whether the original vulnerable swapped path still exists before merging or revising.
+   - Release/25.0 [#4113](https://github.com/X11Libre/xserver/pull/4113) is merged.
+   - Master test-only [#4168](https://github.com/X11Libre/xserver/pull/4168) is merged. Full master source review is recorded in [cve-2026-109094-master-recheck.md](./cve-2026-109094-master-recheck.md).
+
+4. **CVE-2026-93536 — GestureBuildSprite stale WindowPtr UAF.**
+   - The sampled matrix has master and release/25.2 still open; release/25.1 and 25.0 source-fixed.
+   - Recheck exact current branch source, especially WindowGone/destruction ordering, before porting [#3893](https://github.com/X11Libre/xserver/pull/3893).
+   - Do not substitute the unrelated device-sprite animation cleanup [c5453462](https://github.com/X11Libre/xserver/commit/c5453462eac3d801f8b26e482859da3df4369701).
+
+5. **CVE-2026-50263 — DRI2 GetBuffers attachment-array overflow.**
+   - Master fix is [#3266](https://github.com/X11Libre/xserver/pull/3266), merged as [c03bc789](https://github.com/X11Libre/xserver/commit/c03bc789aed3fdf72af0bf0d2ec0d3cf073ecdf8).
+   - Release/25.2 still needs a branch-specific backport. The trigger is the maximum 11 attachment entries without FrontLeft but with BackLeft, requiring a synthesized front buffer.
+   - Inspect release/25.0 and 25.1 separately; their DRI2 source layout differs. Do not infer their status from 25.2.
+
+6. **CVE-2026-109093 — XTestFakeInput valuator range: status reconciled.**
+   - Master [#2964](https://github.com/X11Libre/xserver/pull/2964), release/25.2 [#3115](https://github.com/X11Libre/xserver/pull/3115), and release/25.0 [#2962](https://github.com/X11Libre/xserver/pull/2962) are merged. Release/25.1 already contained the fix before the fork.
+   - The November PR [#4116](https://github.com/X11Libre/xserver/pull/4116) is also merged to 25.0 but is redundant against the earlier fix; a comment proposed reverting it because [24ca991](https://github.com/X11Libre/xserver/commit/24ca9910301217e2d5c0b02958669a9f96dc7cf0) already fixed the issue.
+   - Master regression-test PR [#4170](https://github.com/X11Libre/xserver/pull/4170) remains open. It is test-only and does not represent an outstanding security fix.
+   - Required boundary cases: high firstValuator, equality with numAxes, MAX_VALUATORS overflow, multiple DeviceValuator records, normal and swapped requests, and a valid last-axis boundary.
+
+7. **Resolved November CVEs — no code work currently queued.**
+   - CVE-2026-109091: master [#4174](https://github.com/X11Libre/xserver/pull/4174), 25.2 [#4155](https://github.com/X11Libre/xserver/pull/4155), 25.1 [#4144](https://github.com/X11Libre/xserver/pull/4144), 25.0 [#4120](https://github.com/X11Libre/xserver/pull/4120) merged.
+   - CVE-2026-109095: master [#4167](https://github.com/X11Libre/xserver/pull/4167), 25.2 [#4152](https://github.com/X11Libre/xserver/pull/4152), 25.1 [#4140](https://github.com/X11Libre/xserver/pull/4140), 25.0 [#4111](https://github.com/X11Libre/xserver/pull/4111) merged.
+   - CVE-2026-109096: master [#4185](https://github.com/X11Libre/xserver/pull/4185), 25.2 [#4180](https://github.com/X11Libre/xserver/pull/4180), 25.1 [#4149](https://github.com/X11Libre/xserver/pull/4149), 25.0 [#4126](https://github.com/X11Libre/xserver/pull/4126) merged. The 25.2 merge commit is [a10ba82d](https://github.com/X11Libre/xserver/commit/a10ba82d33f50729d3a9785801d7cd6e65b12b21).
+   - CVE-2026-109904: source protection found on all four branches; 25.0 PR [#4114](https://github.com/X11Libre/xserver/pull/4114) merged.
+
+## Other queued engineering work
+
+1. **Backport [#4040](https://github.com/X11Libre/xserver/pull/4040)** — undefined signed left shift in framebuffer line drawing.
+   - Check exact source on release/25.0, 25.1 and 25.2.
+   - If the vulnerable expression remains, prepare one minimal PR per affected branch.
 
 2. **Repository-wide C undefined-behavior scan.**
-   - Scan the current Xserver code and maintained release branches for patterns similar to #4040: left/right shifts of negative signed values, shift counts outside operand width, signed overflow, unsafe signed/unsigned conversions, and related integer UB.
-   - Distinguish genuine reachable bugs from benign patterns; verify each candidate against the exact target branch and existing refactors.
-   - Record evidence and prioritize minimal fixes plus regression tests. Do not perform broad cleanup as part of this scan.
+   - Check signed shifts, out-of-range shift counts, signed overflow, unsafe signed/unsigned conversions and similar integer UB.
+   - Separate reachable bugs from benign patterns; verify each candidate against exact branch source.
+   - Avoid broad cleanup.
 
-## P0 — close currently confirmed exposure
+## Historical audit
 
-1. **CVE-2026-109093 / XTestFakeInput — all four branches.**
-   - Rework the fix as a minimal bounds-check-only patch; validate before every array write.
-   - Preserve the correct `firstValuator >= dev->valuator->numAxes` rejection and the `MAX_VALUATORS` bound.
-   - [#4116](https://github.com/X11Libre/xserver/pull/4116) is the least invasive starting point, but verify its exact head/CI and normal + swapped request paths.
-   - Do not merge [#4142](https://github.com/X11Libre/xserver/pull/4142) as-is: its diff is over-broad and its boundary check is wrong.
-   - Do not merge [#4161](https://github.com/X11Libre/xserver/pull/4161) as-is: it repeats the off-by-one boundary concern.
-   - Create a minimal master fix as well; the old commit [335fffed](https://github.com/X11Libre/xserver/commit/335fffed92d1e3ac5e12ff71ad57f1c7906c7a07) does not prove the current code safe.
+- Complete 2025 coverage across all four branches, especially [CVE-2025-26597 fix](https://github.com/X11Libre/xserver/commit/0e4ed94952b255c04fe910f6a1d9c852878dcd64) and [CVE-2025-26599 fix](https://github.com/X11Libre/xserver/commit/c1ff84bef2569b4ba4be59323cf575d1798ba9be).
+- Verify sampled CVEs 2025-62229..62231, 2025-49175..49178, 2025-26594..26596, 2025-26598 and 2025-26600..26601 in release/25.0 and release/25.1.
+- Finish individual CVE-to-PR mapping for the April, June and July 2026 advisory groups. Keep CVE-2026-50263 separate from the rest of the June group.
+- Continue the advisory inventory through 2024 and earlier. Keep client-library advisories out of this xorg-server audit.
 
-2. **CVE-2026-109092 / XvShmPutImage — master and 25.2.**
-   - Port the proven shared-memory bounds arithmetic from the merged [#4118](https://github.com/X11Libre/xserver/pull/4118) (25.0) / [#4143](https://github.com/X11Libre/xserver/pull/4143) (25.1) changes.
-   - Add/verify regression tests for offset, size overflow and segment boundary cases.
+## Process / publishing
 
-3. **CVE-2026-109096 / XvPutImage — master and 25.2.**
-   - Port the negative-size rejection from [#4126](https://github.com/X11Libre/xserver/pull/4126) (25.0) and [#4149](https://github.com/X11Libre/xserver/pull/4149) (25.1).
+- Publish the matrix to the [X11Libre GitHub Wiki](./xorg-server-cve-wiki-publishing.md). Update an existing page rather than creating a duplicate; do not force-push.
+- Record exact branch HEADs and keep source findings separate from PR state. A merged PR is not by itself proof that every branch contains the fix.
+- Regression coverage is expected on master. Release-branch test backports are optional; the security fix itself is not optional on an affected release branch.
+- For each active fix, record the exact target branch, source rationale, review status, test/CI evidence and resulting PR/merge commit here, not in the status matrix.
 
-4. **CVE-2026-109903 / XvQueryImageAttributes — master and 25.2.**
-   - Port the negative-size/reply-length protection from [#4127](https://github.com/X11Libre/xserver/pull/4127) (25.0) and [#4150](https://github.com/X11Libre/xserver/pull/4150) (25.1).
+## Acceptance criteria
 
-5. **CVE-2026-93536 / GestureBuildSprite UAF — master and 25.2.**
-   - Port the Gesture sprite-trace cleanup from [#3893](https://github.com/X11Libre/xserver/pull/3893).
-   - Check WindowGone/destruction ordering and add a regression test if feasible. Do not substitute the unrelated device-sprite animation fix [c5453462](https://github.com/X11Libre/xserver/commit/c5453462eac3d801f8b26e482859da3df4369701).
-
-6. **CVE-2026-109091 / EDID DS_RANGES — master.**
-   - Port the bounds guard already merged to 25.0/25.1/25.2 via [#4120](https://github.com/X11Libre/xserver/pull/4120), [#4144](https://github.com/X11Libre/xserver/pull/4144), [#4155](https://github.com/X11Libre/xserver/pull/4155).
-   - Complete and review the open regression tests [#4119](https://github.com/X11Libre/xserver/pull/4119) and [#4154](https://github.com/X11Libre/xserver/pull/4154); add master coverage.
-
-7. **CVE-2026-50263 / DRI2 GetBuffers — 25.2.**
-   - Backport the safe allocation sizing from master commit [c03bc789](https://github.com/X11Libre/xserver/commit/c03bc789aed3fdf72af0bf0d2ec0d3cf073ecdf8).
-   - Inspect the older DRI2 implementations in 25.0/25.1 separately; their source layout differs, so do not infer their status from 25.2.
-
-
-## P0 — prepare missing target-branch fixes
-
-19. **Prepare and validate missing-branch CVE fixes.** Temporary reference hunks and porting notes are in [patch templates](./patch-templates/2026-11-open-branches.md). These are not approved patches and must not be applied blindly. Priority targets:
-    - [CVE-2026-109091](https://github.com/X11Libre/xserver/issues/4132): master has no fix PR; sibling release fixes are merged (#4120/#4144/#4155).
-    - [CVE-2026-109092](https://github.com/X11Libre/xserver/issues/4133): master and 25.2 have no fix PR; #4118/#4143 merged to 25.0/25.1.
-    - [CVE-2026-109093](https://github.com/X11Libre/xserver/issues/4134): master has no fix PR; #4142/#4161 are open but unsuitable; #4116 merged to 25.0 and needs exact revalidation.
-    - [CVE-2026-109096](https://github.com/X11Libre/xserver/issues/4137) and [CVE-2026-109903](https://github.com/X11Libre/xserver/issues/4138): master and 25.2 have no fix PR; merged 25.0/25.1 patches are templates only.
-    - CVE-2026-93536: master/25.2 still need source recheck and likely port of #3893; verify current WindowGone refactor first.
-    - CVE-2026-50263 DRI2 variant: 25.2 requires source recheck and likely port of master commit c03bc789; test exact 11-attachment boundary.
-20. For every target above, first verify exact branch HEAD and current code. Only then prepare a minimal patch and focused regression test. Report per-branch PR state as merged/open/unmerged; do not treat an open PR as a fix.
-21. Keep 2025 CVE-26597/-26599 and older branch coverage in the historical audit queue; do not create speculative fixes until the branch-level source is checked.
-
-## P1 — resolve pipeline PRs and validate merged fixes
-
-8. **XRes CVE-2026-109094 disposition:** [#4169](https://github.com/X11Libre/xserver/pull/4169) (master) is open/unmerged but obsolete: exact current-master inspection shows the old separate swapped handler was removed by the shared-dispatch refactor. `ResExtensionInit()` registers `ProcResDispatch` for normal and swapped requests; `ProcXResQueryResourceBytes()` validates with a `uint64_t` size expression before swapping specs. Do not merge or salvage #4169; close it as obsolete after owner confirmation. [#4168](https://github.com/X11Libre/xserver/pull/4168) is a separate open test-only PR and should be reviewed independently. Existing ticket [#4135](https://github.com/X11Libre/xserver/issues/4135). Full evidence: [master recheck](./cve-2026-109094-master-recheck.md). [#4141](https://github.com/X11Libre/xserver/pull/4141) (25.1) and [#4153](https://github.com/X11Libre/xserver/pull/4153) (25.2) remain open/unmerged; verify those branch sources separately before deciding whether they still need fixes.
-
-9. **CVE-2026-109093 tests:** test high `firstValuator`, `numAxes` equality boundary, `MAX_VALUATORS` overflow, multiple DeviceValuator records, and both swapped/normal requests. Verify valid last-axis boundary still works.
-
-10. **EDID test PRs:** inspect CI and exact current diff for [#4119](https://github.com/X11Libre/xserver/pull/4119) and [#4154](https://github.com/X11Libre/xserver/pull/4154); verify the test catches both hsync and vrefresh array overflow and does not only exercise a helper in isolation.
-
-11. **All recently merged CVE backports:** verify the current branch tips still contain the merged commits and run the relevant focused tests. The merged PRs include #4111/#4120/#4113/#4114/#4118/#4126/#4127 on 25.0; #4140/#4143/#4144/#4149/#4150 on 25.1; #4152/#4155 on 25.2. This is a validation task, not a reason to reopen known-good changes without a concrete regression.
-
-## P2 — finish the historical audit
-
-12. Finish 2025 CVE coverage for **all four** branches, especially:
-    - [CVE-2025-26597 fix commit](https://github.com/X11Libre/xserver/commit/0e4ed94952b255c04fe910f6a1d9c852878dcd64)
-    - [CVE-2025-26599 fix commit](https://github.com/X11Libre/xserver/commit/c1ff84bef2569b4ba4be59323cf575d1798ba9be)
-    - Verify the already sampled CVEs 2025-62229..62231, 2025-49175..49178, 2025-26594..26596, 2025-26598, 2025-26600..26601 in release/25.0 and release/25.1, and confirm exact current source in 25.2/master.
-13. Complete individual CVE-to-PR mapping and regression-test coverage for the April/June/July 2026 advisory groups. June's DRI2 variant must remain a separate row.
-14. Continue the advisory inventory back through 2024 and earlier. Include only X.Org server advisories in this repository scope; keep libX11/libXi/libXpm/libXrender/libXtst/libXfont2 advisories in a separate client-library audit.
-
-## P3 — publishing and process reliability
-
-15. **Publish the matrix to the X11Libre GitHub Wiki.** The dedicated plan is [xorg-server-cve-wiki-publishing.md](./xorg-server-cve-wiki-publishing.md). This is queued as a follow-on task for Voyager's existing session, after its current M1 assignment reaches explicit `task_done`. The task must clone `X11Libre/xserver.wiki.git` as a separate project, inspect for an existing matrix page, update rather than duplicate, push normally (no force-push), and verify the remote commit and rendered page. The current Wormhole matrix is incomplete historically; the Wiki must state coverage gaps rather than overclaim completeness.
-
-16. Repair the failed Voyager CVE audit task envelope before retrying. The previous message failed because the YAML `subject` contained an unquoted colon:
-    `subject: X11Libre: CVE-first audit...`
-    Quote the value (or avoid the colon), validate front matter before publishing, then verify receipt/processing in `mail/Voyager/{new,cur,processed,failed}`. The failed message is archived at [failed task](https://github.com/metux/wormhole-0/blob/master/mail/Voyager/failed/w0-20261116T193000Z-voyager-x11libre-cve-backport-audit-01.md) and [failure reason](https://github.com/metux/wormhole-0/blob/master/mail/Voyager/failed/w0-20261116T193000Z-voyager-x11libre-cve-backport-audit-01.md.reason).
-17. Require explicit `task_progress` and terminal `task_done(completed|blocked|yielded)`; do not infer completion from a pushed commit, message delivery, or a processed marker alone.
-18. Record tested HEAD, exact commands, full exit status/output, and CI run links for every security fix. Distinguish source inspection, unit/regression tests, sanitizer/reproducer tests, and CI.
-19. Keep the role boundaries: Defiant = Xaverius; Discovery = Starfleetctl; Voyager = assigned X11Libre audit/backport work only when explicitly dispatched; Enterprise = coordination/Comms, not technical audit. Do not create duplicate ship sessions or restart existing console ships.
-
-## Acceptance criteria for calling this audit complete
-
-- Every X.Org server advisory in the chosen date range is inventoried, with component applicability recorded.
+- Every X.Org server advisory in the selected date range is inventoried with applicability recorded.
 - Every applicable CVE has a per-branch source assessment at an exact HEAD.
-- Every still-open exposure has a minimal fix PR or an explicit owner/blocker.
-- Every proposed backport has a focused regression test and recorded CI/test evidence.
-- Redundant/obsolete PRs are identified and dispositioned.
-- Wormhole delivery/processing is verified independently from task completion.
+- Every remaining exposure has a minimal fix PR or an explicit blocker/owner.
+- Historical coverage gaps are explicit; do not claim release sign-off from partial samples.
