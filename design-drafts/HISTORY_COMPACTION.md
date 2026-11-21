@@ -86,7 +86,7 @@ A failed preflight is a clean abort. Never silently move pending messages to ano
 - Create a new root commit with **no parent**, using exactly the current branch tree. This is the essential history truncation: the content tree is preserved, while all parent links to the old history are removed.
 - Use a temporary candidate ref for validation. Do not first update the canonical branch.
 - Verify that the candidate commit has zero parents and exactly the recorded tree SHA.
-- Do not keep a permanent backup branch/tag pointing to the old history on GitHub; that would keep the old commits reachable and defeat the goal. If an offline recovery bundle is desired, it must be an explicit operator choice with a documented retention/deletion policy.
+- A temporary backup ref/branch pointing to the pre-compaction head is allowed and is recommended for the initial rollout as a recovery measure. It must be clearly named with the operation ID and creation time, excluded from normal client fetch refspecs, and have an explicit expiry/deletion deadline. It must not become a permanent archive. Delete the temporary ref after the agreed rollback window and verify that no other branch or tag managed by us still points into the old history. Until deletion, old commits remain reachable through that backup ref and may be fetchable by someone who knows its name.
 
 ### 4.4 Publish with compare-and-swap
 
@@ -123,10 +123,10 @@ A post-compaction generation marker may be useful for fast detection, but the au
 
 ## 6. GitHub and retention limitations
 
-This feature can make old commits unreachable from the canonical branch. It cannot guarantee that GitHub immediately deletes the underlying objects or every alternate reference.
+This feature's goal is to make old commits unavailable through normal clones of the canonical branch after compaction. GitHub does not need to physically delete unreachable objects immediately. Temporary backup branches are permitted during a bounded rollback window; while they exist, their old commits remain reachable and may be fetchable through those refs. After the rollback window, delete the backup refs and verify that no branch or tag managed by us still exposes the old history. GitHub may retain unreachable objects internally, and this is acceptable.
 
 Before enabling it on the production repository, inspect:
-- all branches and tags;
+- all branches and tags, including temporary backup refs;
 - open/closed PR refs and other GitHub-managed refs;
 - forks and mirrors;
 - cached commit/patch URLs and externally retained clones.
