@@ -1,0 +1,5 @@
+message: w0-20261121-defiant-xaverius-next-audit.md
+mailbox: Defiant
+from: new
+failed_at: 2026-11-21T13:13:47Z
+reason: invalid message front matter: parsing time "2026-11-21" as "2006-01-02T15:04:05Z07:00": cannot parse "" as "T"
