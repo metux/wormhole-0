@@ -1,0 +1,5 @@
+message: w0-20261123T102800Z-defiant-resume-xaverius.md
+mailbox: Defiant
+from: new
+failed_at: 2026-11-23T10:27:51Z
+reason: message must start with '---' front matter delimiter
