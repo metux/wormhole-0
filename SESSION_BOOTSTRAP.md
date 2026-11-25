@@ -144,3 +144,28 @@ Discovery reported the exact-head read-only review complete for `d161b1b81292d11
 ## End-of-turn update discipline
 
 Update this file only when durable knowledge, ownership, decisions or next steps materially change. Keep it dated and concise. Separate verified facts, owner-reported context, interpretation and proposals. Never claim acknowledgement, process state, CI, tests or implementation without direct evidence.
+
+
+## Continuation checkpoint — 2026-11-25 19:42Z
+
+### XAverius live review follow-up
+- The workspace dashboard file `.starfleet-ai/dashboard/topics/task-physicaldevice-registry-stages-1-4-xaverius.md` on `X11Libre/mpbt-workspace:mtx/agent-config` still lists task `7f540f6aaa` as `in-progress`, assigned solely to Defiant. Its last appended progress entry is 70% from 2026-11-06; do not treat that percentage as current.
+- Re-read current remote `X11Libre/xserver:wip/xaverius` source. `Xext/xaverius/registry.c` still contains the snapshot free-before-copy UAF, early free of an existing preferred binding, non-exact descriptor-size/version error handling, no-op DIX destructor/direct PhysicalDevice AddResource value, and RegistryFini freeing bindings before quiescence. The current source snapshot therefore still matches the five blockers in review message `w0-20261125T174209Z-defiant-registry-review-blockers`. The connector confirmed the branch is 64 commits ahead of xserver master, but did not expose the exact branch-tip SHA in this check; do not invent one.
+- The review message `w0-20261125T174209Z-defiant-registry-review-blockers` is under `mail/Defiant/failed/`, not processed; Defiant has not thereby acknowledged it.
+- Fresh task message `w0-20261125T193700Z-xaverius-review-followup` also entered `mail/Defiant/failed/`. A shorter retry without reply chaining, `w0-20261125T194200Z-xaverius-review-followup-retry`, also entered `failed/`. No Defiant acknowledgement or new source/test evidence is verified. Enterprise was asked in `w0-20261125T194201Z-defiant-failure-diagnostic` to inspect manager-owned diagnostics and report the exact import failure; at checkpoint it remained in `mail/Enterprise/new/`.
+- Do not restart Defiant. Wait for Enterprise's failure diagnosis and use the existing session/worktree only.
+
+### Fleet round-trip check
+- Messages `w0-20261125T193701Z-pr23-review-evidence` (Discovery), `w0-20261125T193702Z-voyager-status-roundtrip` (Voyager), and `w0-20261125T193703Z-fleet-roundtrip-coordination` (Enterprise) are under their respective `mail/<ship>/processed/` directories. This proves Comms import only, not model acknowledgement or task progress.
+- Enterprise was asked to gather per-ship publication/import/session-injection/model-acknowledgement/action evidence, with event IDs, plugin version, PID/session and task board. No reply was verified at this checkpoint.
+- The failed Defiant messages are not evidence that the other ships have processed or replied.
+
+### Starfleetctl lifecycle work
+- PR #23 remains open/draft at exact head `d161b1b81292d11c5f375684db05df1d59c7f9e1`; exact-head Actions run `45671982146` completed successfully. GitHub review list and inline review threads were empty at this checkpoint.
+- Branch `feat/comms-event-lifecycle` compares identical to `feat/comms-event-pipeline` (zero commits ahead/behind); issue #24 remains open and lifecycle implementation has not started.
+- Re-fetched `fragments/opencode-plugins/starfleet-dispatch.ts` on that branch: the new-turn path calls `promptAsync` without a deterministic `messageID` and calls `seen_mark` immediately after successful submission; the current-turn transform path also calls `seen_mark` immediately after injection. Neither is correlated model-turn completion. Issue #24's durable lifecycle/correlation work remains necessary.
+- Discovery was asked in `w0-20261125T193701Z-pr23-review-evidence` to provide the detailed exact-head review report and commands; the message is processed, but no model acknowledgement/report is yet verified.
+
+### Operational caveats
+- The XAverius skill in `X11Libre/mpbt-workspace:mtx/agent-config` still has a canonical API summary containing `XaPhysicalDevicePublish()`, while current Xserver source declares `XaveriusPhysicalDevicePublish()`; reconcile only against normative spec §7, not skill wording.
+- For all new Wormhole messages, track publication, manager import, active-session delivery, explicit model acknowledgement, and action as separate states. Never infer the latter stages from `processed/` or `seen_mark`.
