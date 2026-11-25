@@ -105,7 +105,7 @@ Earlier failures included Comms messages remaining unseen and ships not reacting
 - Code head `542298bf77ee3de68518121c4a0059f4e79f8001`: all three GitHub Actions jobs passed.
 - Go 1.22.x and stable: build, vet, and full test suites passed.
 - Plugin bundle/typecheck passed; 70 plugin tests passed.
-- Documentation-only follow-up head `d161b1b81292d11c5f375684db05df1d59c7f9e1` is awaiting its fresh CI run.
+- Final head `d161b1b81292d11c5f375684db05df1d59c7f9e1` (including documentation updates): all three GitHub Actions jobs passed.
 - No local execution is claimed.
 
 The PR remains draft pending independent read-only review of the exact final head. A fresh read-only review request for head `d161b1b81292d11c5f375684db05df1d59c7f9e1` was published to Discovery as Wormhole message `w0-20261125T181205Z-pr23-exact-head-review`; import and report are not yet confirmed. Enterprise was separately asked to retrieve the earlier review report, without performing a review.
