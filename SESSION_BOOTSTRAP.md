@@ -108,7 +108,7 @@ Earlier failures included Comms messages remaining unseen and ships not reacting
 - Documentation-only follow-up head `d161b1b81292d11c5f375684db05df1d59c7f9e1` is awaiting its fresh CI run.
 - No local execution is claimed.
 
-The PR remains draft pending independent read-only review of the exact final head. Discovery imported a follow-up review request, but no correlated review report with exact SHA/findings has reached ChatGPT yet; Enterprise was asked to retrieve the report, without performing a review.
+The PR remains draft pending independent read-only review of the exact final head. A fresh read-only review request for head `d161b1b81292d11c5f375684db05df1d59c7f9e1` was published to Discovery as Wormhole message `w0-20261125T181205Z-pr23-exact-head-review`; import and report are not yet confirmed. Enterprise was separately asked to retrieve the earlier review report, without performing a review.
 
 **Remaining work:** durable offered/submitted/turn-started/completed/failed lifecycle, restart recovery, and correlated end-to-end tests proving a specific event's model turn started and completed. Neither `seen_mark` nor `promptAsync` returning is completion proof.
 
