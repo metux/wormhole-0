@@ -80,34 +80,37 @@ Earlier failures included Comms messages remaining unseen and ships not reacting
 - Repository: `mpbt-hq/starfleetctl`
 - Base: `master` at `bf6144ebae79c41a166ce6695f9affcf67402bcd`
 - Branch: `feat/comms-event-pipeline`
-- Current head: `582b5e7e83c3631d80289c445b2d95726bf15afa`
+- Current head: `d161b1b81292d11c5f375684db05df1d59c7f9e1`
 - Draft PR: https://github.com/mpbt-hq/starfleetctl/pull/23
-- PR is intentionally a first incremental slice, not completion of issue #23.
-- Plugin version in the fragment is `2.5.18`.
+- Plugin version in the canonical fragment: `2.5.19`.
+- The canonical plugin source is `fragments/opencode-plugins/starfleet-dispatch.ts`; deployed `.opencode/plugins/` files are generated. The misleading fragment header was corrected. See decision `decisions/2026-11-25--starfleetctl-plugin-source-of-truth.md`.
 
-**Verified implementation on this head:**
-- A shared `PreparedPrompt` representation and validator accepts a complete prompt `string` or ordered `string[]`.
-- Both existing V1 adapters (current-turn `experimental.chat.system.transform` and asynchronous `client.session.promptAsync`) use the same temporary legacy inbox formatter and exact prepared text.
-- The Go dispatch wire protocol is not changed yet; legacy inbox formatting remains a temporary compatibility bridge.
-- The helper is `prompt-preparation.mjs`, installed as a runtime module but not registered as a plugin. Its compile-time declaration is `prompt-preparation.d.mts`, not deployed.
-- Bootstrap regression coverage verifies helper installation and non-registration.
-- CI runs the plugin tests via `make test-plugin`.
+**Implemented on the branch:**
+- Generic Go event polling protocol v1 via `events.poll`, with stable event IDs, source metadata, payload, and generic actions.
+- Event types: `prompt.inject` (Go-formatted complete prompt string, `start_turn` intent), `command.execute` (transitional preservation of existing command/model shorthand behavior), and `unsupported` (unknown types remain pending).
+- `init` returns versioned `events` alongside legacy `messages`; the old `inbox` command remains for older plugins.
+- Go owns Comms prompt formatting, sender/context prefix and separators. The plugin validates and concatenates supplied prompt parts without adding Comms formatting.
+- Both V1 OpenCode adapters share one event coordinator, single-flight poller, queue, ordering/deduplication, leases, and dispatcher.
+- Startup events and live polls are deduplicated; failed handoffs release leases; unsupported event types are not acknowledged.
+- The new plugin uses `events.poll` and falls back to legacy `inbox` only when paired with an older CLI.
+- Runtime helper modules and build-only `.d.mts` declarations are packaged by bootstrap.
 
 **Runtime compatibility evidence:**
 - Discovery read-only probe: OpenCode CLI `1.19.3`, resolved `@opencode-ai/plugin` SDK `1.19.3`, timestamp `2026-11-25T17:22:47Z`.
 - Upstream tag `v1.19.3` confirms the existing V1 hooks and `promptAsync` API.
-- `session.idle` is session-scoped and carries no Comms message/event ID; it is not sufficient proof that a particular directive completed.
-- Durable decisions: `decisions/2026-11-25--opencode-1.19.3-compatibility.md` and `decisions/2026-11-25--opencode-plugin-helper-packaging.md`.
+- `session.idle` is session-scoped and carries no Comms event ID; it is not sufficient proof that a particular directive completed.
+- Durable decisions: `decisions/2026-11-25--opencode-1.19.3-compatibility.md`, `decisions/2026-11-25--opencode-plugin-helper-packaging.md`, `decisions/2026-11-25--comms-event-poll-protocol-v1.md`, and `decisions/2026-11-25--starfleetctl-plugin-source-of-truth.md`.
 
-**Exact-head CI evidence (`582b5e7e83c3631d80289c445b2d95726bf15afa`):**
-- All three GitHub Actions jobs passed.
-- Go 1.22.x and stable: build, vet, and full test suite passed.
-- Plugin bundle/typecheck passed.
-- Plugin tests: 59 passed, 0 failed.
-- Bootstrap regression tests passed in the Go matrix.
+**Exact-head CI evidence:**
+- Code head `542298bf77ee3de68518121c4a0059f4e79f8001`: all three GitHub Actions jobs passed.
+- Go 1.22.x and stable: build, vet, and full test suites passed.
+- Plugin bundle/typecheck passed; 70 plugin tests passed.
+- Documentation-only follow-up head `d161b1b81292d11c5f375684db05df1d59c7f9e1` is awaiting its fresh CI run.
 - No local execution is claimed.
 
-Discovery imported a read-only follow-up request for review of PR #23 at the exact head (Wormhole message `w0-20261125T174054Z-pr23-review-followup`). Import is not acknowledgement or review completion; await a correlated report. PR remains draft. Remaining work: one central poller/event dispatcher, generic Go event polling and Go-owned prompt formatting, durable lifecycle/retry semantics, restart recovery, and correlated end-to-end turn-start/completion tests.
+The PR remains draft pending independent read-only review of the exact final head. Discovery imported a follow-up review request, but no correlated review report with exact SHA/findings has reached ChatGPT yet; Enterprise was asked to retrieve the report, without performing a review.
+
+**Remaining work:** durable offered/submitted/turn-started/completed/failed lifecycle, restart recovery, and correlated end-to-end tests proving a specific event's model turn started and completed. Neither `seen_mark` nor `promptAsync` returning is completion proof.
 
 ## XAverius / Xserver
 
