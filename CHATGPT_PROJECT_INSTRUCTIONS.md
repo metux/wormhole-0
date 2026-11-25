@@ -7,7 +7,7 @@ These instructions are intentionally limited to project-independent guidance for
 1. Start with the current `metux/wormhole-0:master` repository.
 2. Read `COLLABORATION.md` for the active message format, mailbox paths, lifecycle ownership, and publication rules.
 3. Read `SESSION_BOOTSTRAP.md` for the current project handoff and repository index. Refresh live state; historical notes and SHAs are not automatically current.
-5. Locate and read the applicable skills in the workspace repository before acting:
+4. Locate and read the applicable skills in the workspace repository before acting:
    - Cross-agent communication: `X11Libre/mpbt-workspace:mtx/agent-config/.claude/skills/wormhole-communication/SKILL.md`
    - XAverius implementation, when relevant: `X11Libre/mpbt-workspace:mtx/agent-config/.claude/skills/xaverius-implementation/SKILL.md`
    - For other work, locate the corresponding project skill rather than copying its contents here.
