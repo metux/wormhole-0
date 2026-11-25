@@ -169,3 +169,17 @@ Update this file only when durable knowledge, ownership, decisions or next steps
 ### Operational caveats
 - The XAverius skill in `X11Libre/mpbt-workspace:mtx/agent-config` still has a canonical API summary containing `XaPhysicalDevicePublish()`, while current Xserver source declares `XaveriusPhysicalDevicePublish()`; reconcile only against normative spec §7, not skill wording.
 - For all new Wormhole messages, track publication, manager import, active-session delivery, explicit model acknowledgement, and action as separate states. Never infer the latter stages from `processed/` or `seen_mark`.
+
+
+## Starfleetctl-only continuation checkpoint — 2026-11-25
+
+This checkpoint records only the Starfleetctl workstream. The current ChatGPT session is explicitly scoped to Starfleetctl; do not inspect, message, assign, or modify XAverius/Xserver work from that session.
+
+- Re-read the current Wormhole protocol and the workspace `wormhole-communication` skill. Active messages are immutable under `mail/<ship>/new/`; `processed/` proves import only. Actionable requests require explicit acknowledgement with interpretation, scope, exclusions, target, prerequisites and blockers; statuses are exactly `received|acknowledged|in_progress|blocked|completed|rejected|cancelled`.
+- Refreshed PR #23: it remains open/Draft in the repository search. Its changed-file list contains 14 files. GitHub currently reports no submitted PR reviews and no inline review threads. The recorded exact-head Actions run `45671982146` for `d161b1b81292d11c5f375684db05df1d59c7f9e1` is completed/successful; this is CI evidence only, not a code review or local test run.
+- Discovery's request `w0-20261125T193701Z-pr23-review-evidence` is in `mail/Discovery/processed/`. A repository search did not find a detailed review artifact with the requested six criterion-by-criterion evidence, personally run commands/results, limitations and findings. No model acknowledgement or detailed report is verified. Do not treat the earlier PASS receipt as a merge-ready review.
+- Branch comparison confirms `feat/comms-event-lifecycle` is identical to `feat/comms-event-pipeline` (0 ahead/behind). The latter is 84 commits ahead of `master`; issue #24 remains open. Lifecycle implementation has not started.
+- Direct PR diff inspection confirms the new-turn adapter calls `promptAsync` without a deterministic `messageID` (plugin lines 895–903) and then calls `seen_mark` after successful submission (906–909). The current-turn adapter pushes prompt text into `output.system` and then calls `seen_mark` (1004–1008). These are submission/injection acknowledgements, not proof that the associated model turn started or completed. This is the central reason issue #24 remains necessary; use correlated assistant completion, not session idle or `seen_mark`, as completion evidence.
+- No local shell, worktree, ship process, or live Comms session was available in this check. No tests were run locally and no ship was restarted or relaunched.
+
+Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review report (or explicitly mark it blocked); then implement issue #24 on the existing lifecycle branch with deterministic new-turn message IDs, current-turn message correlation, durable idempotent transitions/leases/recovery, and tests proving a specific event's correlated assistant turn completed. Re-check branch ownership before writing; do not merge PR #23 without the review artifact and owner decision.
