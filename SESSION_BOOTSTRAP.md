@@ -73,6 +73,42 @@ Next:
 
 Earlier failures included Comms messages remaining unseen and ships not reacting. The polling fix and successful manual web test are progress, not proof every ship-to-session path is healthy. Use correlated round trips and explicit replies.
 
+## Starfleetctl Comms event pipeline — current implementation
+
+**Dedicated Starfleet session owns this workstream.** Do not message Defiant, inspect its worktree, or alter its XAverius task from this session; the separate XAverius session owns Defiant and Xserver `wip/xaverius`. Synchronize across sessions through Wormhole.
+
+- Repository: `mpbt-hq/starfleetctl`
+- Base: `master` at `bf6144ebae79c41a166ce6695f9affcf67402bcd`
+- Branch: `feat/comms-event-pipeline`
+- Current head: `582b5e7e83c3631d80289c445b2d95726bf15afa`
+- Draft PR: https://github.com/mpbt-hq/starfleetctl/pull/23
+- PR is intentionally a first incremental slice, not completion of issue #23.
+- Plugin version in the fragment is `2.5.18`.
+
+**Verified implementation on this head:**
+- A shared `PreparedPrompt` representation and validator accepts a complete prompt `string` or ordered `string[]`.
+- Both existing V1 adapters (current-turn `experimental.chat.system.transform` and asynchronous `client.session.promptAsync`) use the same temporary legacy inbox formatter and exact prepared text.
+- The Go dispatch wire protocol is not changed yet; legacy inbox formatting remains a temporary compatibility bridge.
+- The helper is `prompt-preparation.mjs`, installed as a runtime module but not registered as a plugin. Its compile-time declaration is `prompt-preparation.d.mts`, not deployed.
+- Bootstrap regression coverage verifies helper installation and non-registration.
+- CI runs the plugin tests via `make test-plugin`.
+
+**Runtime compatibility evidence:**
+- Discovery read-only probe: OpenCode CLI `1.19.3`, resolved `@opencode-ai/plugin` SDK `1.19.3`, timestamp `2026-11-25T17:22:47Z`.
+- Upstream tag `v1.19.3` confirms the existing V1 hooks and `promptAsync` API.
+- `session.idle` is session-scoped and carries no Comms message/event ID; it is not sufficient proof that a particular directive completed.
+- Durable decisions: `decisions/2026-11-25--opencode-1.19.3-compatibility.md` and `decisions/2026-11-25--opencode-plugin-helper-packaging.md`.
+
+**Exact-head CI evidence (`582b5e7e83c3631d80289c445b2d95726bf15afa`):**
+- All three GitHub Actions jobs passed.
+- Go 1.22.x and stable: build, vet, and full test suite passed.
+- Plugin bundle/typecheck passed.
+- Plugin tests: 59 passed, 0 failed.
+- Bootstrap regression tests passed in the Go matrix.
+- No local execution is claimed.
+
+Discovery imported a read-only follow-up request for review of PR #23 at the exact head (Wormhole message `w0-20261125T174054Z-pr23-review-followup`). Import is not acknowledgement or review completion; await a correlated report. PR remains draft. Remaining work: one central poller/event dispatcher, generic Go event polling and Go-owned prompt formatting, durable lifecycle/retry semantics, restart recovery, and correlated end-to-end turn-start/completion tests.
+
 ## XAverius / Xserver
 
 - Implementation: `X11Libre/xserver:wip/xaverius`.
