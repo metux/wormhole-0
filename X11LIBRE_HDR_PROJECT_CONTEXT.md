@@ -499,3 +499,18 @@ To avoid rewriting/force-pushing existing PR branches (the collaboration protoco
 | #4233 | [#4237](https://github.com/X11Libre/xserver/pull/4237) | `d9bdcdd8a505dfc7586ed057993211232dc070c7` |
 
 All four replacement PRs are draft, each contains exactly one commit, and CI was queued on their exact heads. The original PRs remain open but now link to the replacements; do not close them until the replacement CI and DCO checks are verified. No local Xserver build/test run is claimed.
+
+
+## Xserver SCM_RIGHTS PRs — consolidate signed-off work on original PRs (2026-11-26 20:10Z)
+
+- Owner clarified that separate replacement PRs are not wanted and explicitly authorized amend/force-push for owner-controlled PR branches. Updated `COLLABORATION.md` to allow this narrow exception: use force-with-lease against the observed exact old head; never rewrite another agent/shared branch without the owner's authorization.
+- Rewrote the original PR branches as single DCO-signed commits instead of maintaining replacement PRs. All new commits are based directly on current Xserver master `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89` and preserve their respective PR trees, except #4232 which additionally fixes the Alpine/musl linker issue described below.
+  - #4230 branch `test/xtrans-af-unix-fd-framing`, head `8aaa71ad6d424e987ab5880fd97c6fd86b30f2f6`, CI run `45888660431` queued.
+  - #4231 branch `fix/xtrans-reject-truncated-fd-groups`, head `dfe2e77d4c832ac00820fd2f231b85c024d0eede`, CI run `45888664565` queued.
+  - #4232 branch `fix/xtrans-fd-queue-allocation-failure`, head `c50bd2aa6b4f12f9fd153613f78a5b037c7cbac9`, CI run `45888560671` queued.
+  - #4233 branch `ci/fix-signoff-action-permissions`, head `2c65e302c47d6edddb8296cd1321e7354f1f851a`, CI run `45888669984` queued.
+- All four commits carry the explicitly authorized trailer `Signed-off-by: Enrico Weigelt, metux IT consult <info@metux.net>`. Branch updates used force-with-lease with the previously observed heads. PRs #4230–#4233 remain open; no merge performed.
+- Closed replacement PRs #4234, #4235, #4236 and #4237 as superseded, not merged. The original PRs now hold the active changes.
+- CI exposed a genuine Alpine/musl failure on former #4236 head `e73f28888e3c6070ed6d208af5bd3eb557f29ae9`: linker error `hidden symbol __wrap_malloc ... is referenced by DSO`. Updated `test/xtrans-fd-alloc.c` to declare `__wrap_malloc` with `visibility("default")`; new head #4232 is awaiting exact-head CI. This targeted fix is based on the linker log and has not yet been validated by a rerun.
+- The signed-off check completed successfully on replacement #4234's exact head (run `45883291726`), confirming the DCO trailer is recognized. New exact-head checks are queued on the original PRs; no current CI success is claimed for the rewritten heads.
+- Xserver master remains `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`. No local build/tests were run. No PR was merged.
