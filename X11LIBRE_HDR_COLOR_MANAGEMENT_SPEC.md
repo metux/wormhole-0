@@ -1098,7 +1098,7 @@ These are deliberate compatibility shims, not spare extension slots. HDR must no
 
 ### 29.5 Registration timing and private allocation
 
-The current `dixRegisterPrivateKey()` implementation explicitly supports `PRIVATE_SCREEN` keys after screens already exist: its `allocated_early[PRIVATE_SCREEN]` handler walks both regular and GPU screens and fixes up their private allocations. This makes the existing mechanism suitable for optional late registration without changing `ScreenRec` layout. It can still fail on allocation; handle that as a per-screen feature-unavailable result.
+The current `dixRegisterPrivateKey()` implementation explicitly supports `PRIVATE_SCREEN` keys after screens already exist: its `allocated_early[PRIVATE_SCREEN]` handler walks both regular and GPU screens and fixes up their private allocations. This makes the existing mechanism suitable for optional late registration without changing `ScreenRec` layout. It can still fail on allocation; handle that as a per-screen feature-unavailable result. The `dixRegisterPrivateKey()` API also warns that registration may relocate private storage; any pointer obtained from `dixGetPrivateAddr()` / `dixLookupPrivate()` must not be cached across subsequent private-key registrations. Prefer registering the core key during deterministic server initialization before publishing or retaining per-screen record pointers.
 
 Use a core-owned static key and a core-owned initialization/registration helper. The driver-facing call, if any, should only submit a versioned operations table and backend context to that helper. This avoids module-owned key lifetime and keeps DDX-specific state out of the public `ScreenRec`.
 
