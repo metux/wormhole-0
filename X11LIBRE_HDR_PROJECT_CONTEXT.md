@@ -323,3 +323,26 @@ Updated design in HDR specification section 30 (commit `49303af27f6e059caebfce1c
 - HDR itself remains runtime-optional: failed FP16/shader/export/synchronization/hardware probes simply leave HDR unregistered for that screen;
 - core remains independent of Glamor, and NVIDIA remains on the legacy SDR path unless it explicitly implements a provider;
 - callback/resource teardown ordering remains mandatory.
+
+
+### 2026-11-26 — Color-buffer ownership / DMA-BUF / synchronization design
+
+Refreshed Xserver master: `3132e4b7997b525d046e727c1db6656d14b5bc20`.
+
+Source facts:
+- `glamor` is a static library linked into the separately loaded `libglamoregl.so`; `modesetting_drv.so` loads Glamor through the Xorg module loader and resolves symbols dynamically. The modules are built/deployed together, so new internal HDR helpers are required same-build symbols, not optional compatibility variants.
+- Glamor's EGL private state owns the EGL display/context, DRM fd, and GBM device. modesetting obtains that same GBM device through `glamor_egl_get_gbm_device()` and uses it for modesetting BOs when Glamor is enabled.
+- Glamor already exports DMA-BUFs from pixmaps and has `glamor_egl_flush_fence_fd()` for exporting an EGL native fence after `glFlush()`.
+- Existing DRI3 syncobj support is a distinct mechanism and its capability probe does not prove a compositor-facing acquire/release protocol.
+
+Design proposal recorded in HDR spec section 30.10 (commit `5cb70e943dd77d791e96162d85dc8b1dd1b0a1be`):
+- DIX/core owns logical window/buffer generations and references only.
+- modesetting owns the optional per-screen provider and orchestration, not a second GBM allocator.
+- Glamor owns opaque physical FP16 color-buffer objects (GBM BO/EGLImage/GL texture/FBO), DMA-BUF export, and EGL synchronization.
+- The Composite extension owns FD handoff and generation-correlated compositor release.
+- Export descriptor includes FourCC, modifier, dimensions and per-plane FD/stride/offset; exact FP16 DRM format remains open.
+- Do not require KMS scanout usage for compositor input buffers unless a separate direct-scanout optimization requires it.
+- Initial sync proposal is explicit native-fence FD in both directions. Existing fence export helper is only a building block; import/wait and consumer release must be validated end-to-end.
+- Section 30.3's illustrative provider table needs separate compositor-release/reuse and final physical destruction semantics before API freeze.
+
+No Xserver source code was changed. No implementation authorization was granted.
