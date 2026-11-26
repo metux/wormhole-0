@@ -1717,3 +1717,98 @@ Use core X errors for malformed XIDs, invalid values, authorization failures and
 - `BufferReady` events carry no FDs; every FD transfer is tied to a specific request/reply with generated bindings.
 
 These request names, status names and fields are provisional design vocabulary only. A future step must translate this matrix into a real xcb-proto schema, generate bindings, compile them, and add round-trip tests before any server implementation.
+
+
+
+## 30.17 — XCB protocol-schema mapping (draft, not wire-frozen)
+
+This section translates the provisional matrix in 30.16 into xcb-proto-compatible structures. It is a schema design review, not a committed XML file and not implementation authorization.
+
+### Verified generator/transport conventions
+
+The current public xcb-proto mirror was inspected at `gitlab-freedesktop-mirrors/xcbproto:master`, commit `c70aba5cc6ae87757111dac737fc814b3605f0d4`. Its `src/dri3.xml` (blob `d681aae88abd834a5397fa20b4114e0fcae66413`) provides concrete precedents:
+
+- A reply begins with a `CARD8 nfd` in the first reply data byte, followed by one or more `<fd>` / `<list type="fd">` fields.
+- A request may carry a single `<fd>` or an FD list whose length is an earlier request field. DRI3 `PixmapFromBuffers` uses `<list type="fd">` with `num_buffers`.
+- DRI3 `BuffersFromPixmap` uses a reply FD list whose length is `nfd`.
+- `<required_start_align align="8"/>` is the established way to align requests/replies containing CARD64 values.
+- The xcb-proto schema permits FD elements and FD lists in request/reply field sequences. The XML documentation explicitly describes FDs as out-of-band transport fields.
+
+libxcb master was previously checked at `X11Libre/mirror.fdo.libxcb:aa7f3256060451ad65a38feeccf792f44181a4e0`: generated reply-FD requests are marked `XCB_REQUEST_REPLY_FDS`; the FD count is taken from reply byte `pad0`; generated accessors locate the appended FD array. Request-side FD lists use `xcb_send_request_with_fds()`. Received FDs are caller-owned; outgoing FDs are transferred to XCB ownership. FD support remains conditional on `HAVE_SENDMSG`.
+
+### Proposed schema shape
+
+- Define a new XID type (provisionally `CMCONTEXT`) for the compositor claim. The client allocates the XID and supplies it to `AcquireCompositor`; the server registers a resource owned by that client. The resource binds one ScreenRec and one server-generated connection epoch. Destroying the client/resource revokes the claim automatically.
+- `AcquireCompositor` takes `screen: CARD32` and `context: CMCONTEXT`; its reply returns `epoch: CARD64`. A second live claim for the same ScreenRec returns `BadAccess`. Other requests carry the context XID, so the server resolves screen and epoch from the resource rather than trusting client-supplied screen/epoch values on every operation.
+- `ReleaseCompositor` takes the context XID. It stops new publication but does not release outstanding buffer leases.
+- `SubscribeWindow` and `UnsubscribeWindow` take context + WINDOW. Subscription is valid only if that same client currently owns Composite manual redirection for that exact window. Automatic redirection and PanoramiX/Xinerama multi-screen redirection remain unsupported in v1.
+- `AcquireBuffer` takes context + WINDOW + generation (`CARD64`). Its reply always carries a status and an FD count. On a non-ready status the FD count is zero. On READY, the descriptor carries object_count DMA-BUF objects followed by exactly one producer-fence FD; therefore `nfd = object_count + 1`.
+- `ReleaseBuffer` takes context + WINDOW + generation + release_mode + fd_count and an FD list of length fd_count. FENCED requires exactly one release-fence FD; NO_USE requires zero FDs and is legal only when the compositor submitted no GPU read for that lease. All other combinations are rejected.
+- `QueryCapabilities` takes a ScreenRec index and returns only end-to-end usable capabilities, working-space ID, dimension limits, maximum plane/object counts and accepted FourCC/modifier pairs. A capability is not advertised merely because one isolated GL/EGL/GBM primitive exists.
+
+### FD descriptor layout
+
+For v1, retain the provisional limit of at most four DMA-BUF objects plus one producer fence. Do not equate plane count with FD count: multiple planes may refer to one DMA-BUF object.
+
+The reply contains:
+- `nfd: CARD8` as its first data byte;
+- status and fixed descriptor header;
+- `object_count`, `plane_count`, dimensions, FourCC and modifier;
+- one plane record per plane: object_index, stride and offset;
+- an FD list of length nfd, ordered as object FDs [0..object_count-1], then producer fence last.
+
+Each plane record's object_index must be less than object_count. The server validates object_count (1..4), plane_count (1..4), dimensions, format/modifier pair, per-plane object index, stride/offset bounds and total descriptor size before sending. The client validates the same invariants before importing. FDs are not serialized as integer descriptor numbers in the ordinary X packet.
+
+The release request carries either one FD (FENCED) or none (NO_USE). The server must validate the declared fd_count against release_mode and the actual received ancillary-FD count; malformed combinations must not be interpreted as implicit release.
+
+### Alignment and event sizing
+
+Any request/reply containing CARD64 fields must use explicit XCB start alignment where required by the generated layout. The variable format/modifier list needs a fixed, documented element layout and verified alignment; do not assume a C struct's native padding defines the wire representation.
+
+The three proposed notifications (BufferReady, BufferInvalidated, StreamError) do not carry FDs. Their fields include context, window, epoch and generation; BufferReady additionally includes dimensions and working-space ID. That payload exceeds a traditional fixed 32-byte core event once the full correlation key is included. Use X Generic Events (XGE) for the notifications, or deliberately redesign a compact fixed-size event before freezing the schema. Do not truncate the epoch/generation or omit correlation fields merely to fit a core event.
+
+### Status and failure rules
+
+Use ordinary X errors for malformed resource IDs/values and access violations (for example BadWindow, BadValue, BadAccess, BadAlloc). Use extension reply statuses for asynchronous frame conditions: READY, NOT_READY, STALE, UNSUPPORTED and BACKEND_FAILED. ReleaseBuffer replies distinguish QUEUED (release fence accepted and GPU wait ordered before future writes) from QUARANTINED (the server cannot safely reuse the allocation). QUEUED does not mean the GPU is idle.
+
+A transport that cannot pass FDs must report the handoff unsupported. Do not send a DMA-BUF descriptor with missing FDs, substitute integer FD values, silently use implicit synchronization, or fall back to CPU blocking waits. Remote/non-local X transports without a verified FD-passing path must not advertise this capability. Client-side libxcb must be built with FD passing support; the server cannot infer this from its own QueryCapabilities result.
+
+### Draft XML fragments (illustrative only)
+
+A reply carrying a variable number of FDs follows the DRI3 pattern:
+
+```xml
+<reply>
+  <field type="CARD8" name="nfd"/>
+  <field type="CARD8" name="status"/>
+  <!-- fixed descriptor fields and plane list -->
+  <list type="fd" name="fds">
+    <fieldref>nfd</fieldref>
+  </list>
+</reply>
+```
+
+The release request's optional FD uses a counted list rather than conditional integer-FD encoding:
+
+```xml
+<field type="CARD8" name="release_mode"/>
+<field type="CARD8" name="fd_count"/>
+<pad bytes="2"/>
+<list type="fd" name="release_fds">
+  <fieldref>fd_count</fieldref>
+</list>
+```
+
+Server validation enforces (FENCED, 1) or (NO_USE, 0). The XML generator exposes the FD list to XCB; the semantic pairing remains a server-side protocol invariant.
+
+### Still open before a real XML file can be accepted
+
+1. Final extension name, version policy, opcodes, enum values and exact field widths.
+2. Exact fixed descriptor and plane-record wire sizes, CARD64 alignment and variable-list placement.
+3. Whether QueryCapabilities uses a list of fixed FormatModifier records or a normalized format table; verify generated accessors and endian handling.
+4. XGE event structure and event-mask/subscription semantics.
+5. Exact mapping of each backend failure to a reply status versus an X error.
+6. Confirm Xtrans server-side ancillary-FD receive/send support for every supported local transport and fail closed otherwise.
+7. Validate schema with the actual xcb-proto `xcbgen`/libxcb generator, compile generated bindings, and run a real client/server FD round trip including zero-FD NO_USE, one-FD release, multi-object acquire, malformed counts, partial send failure and client disconnect.
+
+No XML, generated binding, Xserver source, tests or runtime behavior were changed.
