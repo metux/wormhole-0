@@ -228,3 +228,6 @@ A proposal was added to section 26 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md`:
 Evidence: ICC.1:2022 clauses 6.2 and Annex E recommend linear Bradford where there is no reason to choose another method, citing broad implementation and excellent visual performance. W3C CSS Color 4 (2026-11-12 CRD) uses linear Bradford for D65/D50 conversions and specifies the transform pipeline from linear RGB through XYZ with adaptation where needed. Sources: ICC.1:2022, https://www.color.org/specifications/ICC.1-2022-05.pdf; W3C CSS Color 4, https://www.w3.org/TR/2026/CRD-css-color-4-20261112/.
 
 Owner approval remains pending for the CAT choice, full-adaptation policy, relative-vs-absolute source semantics and ICC/CMM ownership. No Xserver implementation was changed or authorized.
+
+
+Clarification to the section 26 pipeline: relative SDR (e.g. sRGB) linear XYZ is scaled by its declared reference-white cd/m²; PQ decoding already yields absolute luminance and must not be multiplied by that reference-white value; absolute-colorimetric XYZ/PCS keeps its supplied absolute scale. All are then expressed on the common 203 cd/m² working scale. See latest spec commit `3444503d`.
