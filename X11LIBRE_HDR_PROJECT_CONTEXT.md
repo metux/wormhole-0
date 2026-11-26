@@ -215,19 +215,22 @@ A standards cross-check refined the default recorded above: the HDR color-manage
 Thus the session-wide `LegacySDRReferenceWhite` default is 203 cd/m²; it is configurable (e.g. 80 or 100 cd/m²), never per-output. The implicit profile remains sRGB/D65. Explicit Color Descriptions override the legacy default. See spec section 25.5 for the distinction between SDR reference-display viewing and HDR composition.
 
 
-## 2026-11-26 — Chromatic-adaptation design investigation
+## 2026-11-26 — Chromatic-adaptation decisions and remaining work
 
-A proposal was added to section 26 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md`:
+**Owner-approved for v1 (2026-11-26):**
+- ICC linear Bradford is the single chromatic-adaptation method for relative-colorimetric RGB sources whose white point differs from D65.
+- Full adaptation only; no partial-adaptation control and no per-window/per-output CAT selector.
+- The source-description model must explicitly distinguish relative-colorimetric RGB from absolute-colorimetric XYZ / already-adapted PCS. Do not infer this from transfer function, primaries or buffer format; this prevents double adaptation.
 
-- Recommend ICC linear Bradford as the single v1 chromatic-adaptation method for relative-colorimetric RGB sources whose white point differs from D65; full adaptation, no per-window/per-output CAT selector.
-- CAT16 remains a possible later research/extension candidate, not a v1 choice absent a concrete requirement.
-- Preserve absolute-colorimetric XYZ / already-adapted PCS data; never apply CAT twice. ICC CMM/profile-intent semantics need an explicit integration contract.
-- Proposed order: alpha interpretation → transfer decode → source RGB-to-XYZ → Bradford to D65 (if needed) → XYZ-to-linear-BT.2020 → absolute luminance scaling / divide by 203 → linear premultiply → RGBA FP16.
-- Source white point, reference-white luminance and pixel format remain separate concepts.
+The approved pipeline is: alpha interpretation → transfer decode → source RGB-to-XYZ → full Bradford to D65 if needed → XYZ-to-linear-BT.2020 → resolve absolute luminance semantics and divide by 203 cd/m² → linear premultiply → RGBA FP16. Negative intermediate components remain valid and must not be clamped. Reference-white scaling is independent of CAT.
+
+**Remaining design questions:**
+- ICC profile ingestion and CMM ownership: proposal is to keep arbitrary ICC profile ingestion out of the first protocol version and begin with parametric Color Descriptions. If ICC support is added, one CMM must own profile processing/rendering intent, expose explicit PCS semantics, and leave exactly one PCS-to-D65 adaptation to the Xlibre pipeline where required.
+- Define validation tolerances and canonical white-point precision for identity detection and matrix caching.
+- HLG remains gated pending system-gamma / nominal-peak semantics; non-finite FP16 input/output policy remains open.
 
 Evidence: ICC.1:2022 clauses 6.2 and Annex E recommend linear Bradford where there is no reason to choose another method, citing broad implementation and excellent visual performance. W3C CSS Color 4 (2026-11-12 CRD) uses linear Bradford for D65/D50 conversions and specifies the transform pipeline from linear RGB through XYZ with adaptation where needed. Sources: ICC.1:2022, https://www.color.org/specifications/ICC.1-2022-05.pdf; W3C CSS Color 4, https://www.w3.org/TR/2026/CRD-css-color-4-20261112/.
 
-Owner approval remains pending for the CAT choice, full-adaptation policy, relative-vs-absolute source semantics and ICC/CMM ownership. No Xserver implementation was changed or authorized.
-
+These are design decisions only; they do not freeze the extension wire ABI or authorize Xserver implementation.
 
 Clarification to the section 26 pipeline: relative SDR (e.g. sRGB) linear XYZ is scaled by its declared reference-white cd/m²; PQ decoding already yields absolute luminance and must not be multiplied by that reference-white value; absolute-colorimetric XYZ/PCS keeps its supplied absolute scale. All are then expressed on the common 203 cd/m² working scale. See latest spec commit `3444503d`.
