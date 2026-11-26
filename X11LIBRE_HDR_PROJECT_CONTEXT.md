@@ -135,3 +135,13 @@ Next HDR design work:
 3. Compare a stable transformed pixmap object against a new versioned Composite/color-management contract; do not assume the DDX NameWindowPixmap hook is sufficient.
 4. Refine the spec with evidence and mark unresolved decisions for owner review.
 5. Do not modify Xserver implementation until the design gates in the spec and owner authorization are satisfied.
+
+
+Further lifecycle finding from the 2026-11-26 source review:
+
+- `DamageRegister()` registers a window Damage object both in the Window's private Damage list and in the current backing Pixmap's list.
+- The `damageSetWindowPixmap()` wrapper migrates all window-registered Damage objects off the old Pixmap list, invokes the underlying `SetWindowPixmap()`, and attaches them to the new Pixmap list. This makes a server-owned Damage object registered on the Window a viable candidate for following Present/Composite pixmap swaps.
+- This does **not** retarget a compositor's existing CompositeNameWindowPixmap resource: `SingleCompositeNameWindowPixmap()` stores a reference to the exact PixmapPtr current at request time. Later window pixmap swaps do not, in that code path, update that resource.
+- Therefore, the likely prototype shape is a window-attached Damage observer plus a separate stable transformed Pixmap object for the compositor, but this remains a hypothesis until Composite protocol semantics, resize handling and actual compositor re-name behavior are verified.
+
+The detailed analysis is recorded in section 16.1 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md` (latest follow-up commit `2cd6b5781e61594cea9a99750eea87341e16fc3f`). No Xserver source was changed.
