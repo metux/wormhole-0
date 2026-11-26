@@ -225,7 +225,7 @@ Thus the session-wide `LegacySDRReferenceWhite` default is 203 cd/m²; it is con
 The approved pipeline is: alpha interpretation → transfer decode → source RGB-to-XYZ → full Bradford to D65 if needed → XYZ-to-linear-BT.2020 → resolve absolute luminance semantics and divide by 203 cd/m² → linear premultiply → RGBA FP16. Negative intermediate components remain valid and must not be clamped. Reference-white scaling is independent of CAT.
 
 **Remaining design questions:**
-- ICC profile ingestion and CMM ownership: proposal is to keep arbitrary ICC profile ingestion out of the first protocol version and begin with parametric Color Descriptions. If ICC support is added, one CMM must own profile processing/rendering intent, expose explicit PCS semantics, and leave exactly one PCS-to-D65 adaptation to the Xlibre pipeline where required.
+- ICC profile ingestion/CMM: owner-approved decision is parametric Color Descriptions only in v1; arbitrary ICC profiles and CMM integration are deferred to a separately approved future version.
 - Define validation tolerances and canonical white-point precision for identity detection and matrix caching.
 - HLG remains gated pending system-gamma / nominal-peak semantics; non-finite FP16 input/output policy remains open.
 
@@ -234,3 +234,20 @@ Evidence: ICC.1:2022 clauses 6.2 and Annex E recommend linear Bradford where the
 Durable owner decision: `decisions/2026-11-26--hdr-linear-bradford-and-source-semantics.md`. These are design decisions only; they do not freeze the extension wire ABI or authorize Xserver implementation.
 
 Clarification to the section 26 pipeline: relative SDR (e.g. sRGB) linear XYZ is scaled by its declared reference-white cd/m²; PQ decoding already yields absolute luminance and must not be multiplied by that reference-white value; absolute-colorimetric XYZ/PCS keeps its supplied absolute scale. All are then expressed on the common 203 cd/m² working scale. See latest spec commit `3444503d`.
+
+
+## 2026-11-26 — Owner decision: parametric Color Descriptions only in v1
+
+The owner approved deferring arbitrary embedded ICC profiles and general-purpose CMM integration beyond v1. The first Color Description model will use explicit parameters: RGB primaries, white point, transfer function, luminance/reference-white semantics and relative-versus-absolute colorimetric interpretation. See specification section 26.6. This is a scope decision, not a wire-ABI freeze or implementation authorization.
+
+## 2026-11-26 — Direct output path without a compositor (proposal)
+
+The owner raised the possibility of converting directly into each monitor's output color space when no compositor is active. The design proposal is documented in specification section 27:
+
+- Convert the final desktop image late and independently per output, not once globally, because outputs may have different color spaces and a window may span them.
+- Prefer per-CRTC DRM/KMS color-pipeline blocks (degamma LUT, CTM, gamma LUT) where sufficient; otherwise use output-specific GPU/shader scanout buffers; preserve legacy SDR fallback when no correct transform is available.
+- Treat this as a separate path from per-window conversion into the common linear BT.2020 compositor handoff.
+- A final-output transform cannot recover per-window color semantics already lost during rasterization. Rich per-window HDR descriptions may require internal redirection/composition or a future rendering contract.
+- Audit Present/direct scanout, overlays, cursors and video planes separately; primary-plane color management alone is insufficient.
+
+This is a proposal for investigation, not yet an owner-approved architecture or implementation authorization.
