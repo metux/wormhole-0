@@ -530,3 +530,11 @@ All four replacement PRs are draft, each contains exactly one commit, and CI was
 - #4230 remains based on master at `8aaa71ad6d424e987ab5880fd97c6fd86b30f2f6`. #4233 remains based on master at `2c65e302c47d6edddb8296cd1321e7354f1f851a`.
 - DCO nuance: GitHub's commit API reports `verification=false/reason=unsigned` because no cryptographic GPG signature was created; this is distinct from DCO. The repository's Signed-Off-By action recognizes the explicit trailer on the checked heads. The old bot comment on #4233 refers to superseded commit `3444490...`; current #4233 head's DCO job passed.
 - No PR merged. No local build/test run claimed. Do not mark the new #4231/#4232 heads green until their exact-head runs complete; then inspect unit-test and Alpine logs and recheck all PR bases/mergeability before recommending merges.
+
+## Follow-up: FreeBSD NULL include fix and latest exact heads (2026-11-26 22:30Z)
+
+- The first live-MSG_CTRUNC test run 45904081384 exposed one additional FreeBSD-only compile error in test/xtrans-fd-trunc.c: NULL was used by the unconditional test-suite registration function while stddef.h was included only inside the Linux guard. Fixed by including stddef.h unconditionally.
+- Current #4231 head is 60a22b75864952817bd1589deac81571574ce5a7, parent master d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89; new exact-head run 45904923410 is pending.
+- Rebasing stacked #4232 onto corrected #4231 head produced current #4232 head b8febd859ebffb83e5a1964d411eaafb92bf008b, parent 60a22b75864952817bd1589deac81571574ce5a7; exact-head run 45904977771 is pending. Its base branch remains #4231.
+- Intermediate #4231 heads d515dc6... and a30fba0..., and #4232 heads f3c106b... and a268eff.../eefed71..., are superseded; do not cite their CI as current-head validation.
+- Both PR descriptions were updated with the FreeBSD failure/fix and current run IDs. No PR merged. Await exact-head CI before further merge recommendations.
