@@ -71,6 +71,6 @@ Store durable agreements in `decisions/` as `YYYY-MM-DD--topic.md`. Include the 
 2. Use `master` unless the owner designates another branch.
 3. Make small, scoped commits with descriptive subjects. Do not reformat, rename, or reorganize unrelated content.
 4. Never overwrite concurrent changes. Re-read the target and reconcile if its head or content changed.
-5. Do not force-push.
+5. Do not force-push by default. An explicit owner instruction may authorize rewriting an owner-controlled PR branch; in that case use force-with-lease with the exact observed old head, verify the resulting ref, and preserve the PR rather than creating a replacement PR. Never rewrite another agent's branch or a shared/protected branch without its owner's explicit authorization.
 6. A Git push proves publication only; it does not prove import, session delivery, processing, or task completion.
 7. Never commit credentials, tokens, private keys, personal data, or other secrets.
