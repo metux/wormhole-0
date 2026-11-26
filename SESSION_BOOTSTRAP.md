@@ -297,3 +297,11 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - Current open PR inventory: only PR #33. PR #32 is closed as superseded; PR #31 and #29 are merged.
 - Duplicate historical refs `feat/comms-event-lifecycle` and `feat/comms-event-pipeline` still point to the superseded PR #23 tree `d161b1b81292d11c5f375684db05df1d59c7f9e1`; neither has unique lifecycle code. They were deliberately not rebased. Create the active issue #24 lifecycle branch from the resulting master only after PR #33 is merged. Preserve the old refs until then.
 - `feat/comms-event-pipeline-rebased` (old PR #32 head) and `feat/comms-event-pipeline-clean-history` (old PR #25 head) remain unchanged. Historical `backup/master-2026-11-07` remains untouched. No force-pushes, no local tests, and no ship restarts.
+
+
+### Starfleetctl PR #33 — commit-message cleanup — 2026-11-26 13:37Z
+
+- Owner requested a descriptive semantic commit message and explicitly authorized force-pushes where useful. Recreated the one-commit PR #33 head with the exact same tree `b4fee244963ad0c93fe9538c1e28c66eb97a89b1`, same parent/master `c18352bb3269524294fda90d6d319ddef92098dd`, and updated branch using force-with-lease (expected old head `d23a8ca73f42a1634307222eb272b42f6bc3de35`). New head: `5783f16af0ed45ebbcb0022f19c22b8f16f63daf`.
+- New commit subject: `refactor(comms): unify polling and OpenCode event delivery`. Body explains Go-owned prompt formatting/event classification, shared adapter coordination/deduplication, legacy compatibility, packaged helper modules/plugin tests, and explicitly defers durable turn lifecycle to issue #24.
+- PR #33 description updated to the new SHA and exact verification state. The diff remains one commit, 13 files, ahead 1 / behind 0; no source tree changes were introduced by the message rewrite. Old PR #32 branch/history remains untouched.
+- Previous tree-equivalent SHA `d23a8ca73f42a1634307222eb272b42f6bc3de35` passed all three jobs in Actions run `45823658776` (plugin-typecheck, Go 1.22.x, stable). The rewritten SHA needs its own exact-head CI run; at the time of this update no run was yet returned for the new SHA. PR #33 remains Draft/open, not merged, awaiting exact-head CI and independent review.
