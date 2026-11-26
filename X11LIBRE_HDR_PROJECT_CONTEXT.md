@@ -346,3 +346,5 @@ Design proposal recorded in HDR spec section 30.10 (commit `5cb70e943dd77d791e96
 - Section 30.3's illustrative provider table needs separate compositor-release/reuse and final physical destruction semantics before API freeze.
 
 No Xserver source code was changed. No implementation authorization was granted.
+
+FP16 DMA-BUF format research follow-up: `DRM_FORMAT_ABGR16161616F` is a concrete candidate for the RGBA FP16 handoff. Its DRM definition describes little-endian A:B:G:R 16-bit floating components, corresponding to R/G/B/A component order in little-endian memory. It is not yet a fixed requirement; runtime GL renderability, GBM allocation/modifier support, export and compositor import/channel/alpha interpretation must all be tested. Big-endian handling and alternative formats remain open. Specification follow-up commit: `1e7ce056f3277694bd1c2841c048467641e893e9`.
