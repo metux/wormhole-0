@@ -439,6 +439,29 @@ Relevant source paths:
 
 This investigation is a source review only. No Xserver code, build, runtime or test changes were made as part of this draft.
 
+### 16.1 Damage migration and Composite resource identity
+
+A more detailed read of `miext/damage/damage.c` establishes two useful facts:
+
+- `DamageRegister()` records a Damage object both on the window-private list (`pNextWin`) and on the current drawable/pixmap Damage list.
+- The `damageSetWindowPixmap()` wrapper removes all Damage objects registered on the window from their previous pixmap list, calls the underlying `SetWindowPixmap()`, then inserts those same Damage objects into the new pixmap's Damage list.
+
+This is specifically designed to keep window-registered Damage objects attached as the window's backing pixmap changes, including Composite redirection and Present/rootless pixmap swaps. Thus a server-owned Damage object registered against the Window is a stronger candidate for source-update tracking than a Damage object registered against a one-time Pixmap pointer.
+
+However, this does **not** solve the compositor-facing pixmap identity problem:
+
+- `SingleCompositeNameWindowPixmap()` increments the current `PixmapRec.refcnt` and stores that exact `PixmapPtr` in the client's pixmap resource.
+- A later `SetWindowPixmap()` changes the pixmap associated with the Window; the resource already returned by Composite still references the previously named pixmap object unless an explicit mechanism updates/replaces that resource.
+- The server's Damage migration keeps a window-registered Damage object following the Window's current pixmap; it does not automatically retarget a compositor client's already-created named-pixmap resource.
+
+This yields a promising but still unproven prototype direction: keep a server-owned Damage object registered on the Window to observe updates and pixmap swaps, while exposing a separate stable transformed Pixmap object to the compositor and updating its contents. Resize, depth/format changes, compositor re-name behavior and outstanding references still need explicit treatment. The stable-object approach must not be accepted until Composite protocol semantics and real compositor behavior are verified.
+
+Relevant implementation locations:
+- `miext/damage/damage.c:getDrawableDamageRef()`
+- `miext/damage/damage.c:damageSetWindowPixmap()`
+- `miext/damage/damage.c:DamageRegister()`
+- `Xext/composite/compext.c:SingleCompositeNameWindowPixmap()`
+
 ## 17. References
 
 - X11Libre Xserver source: https://github.com/X11Libre/xserver
