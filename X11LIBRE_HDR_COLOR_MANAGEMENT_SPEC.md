@@ -1942,3 +1942,75 @@ This is a source-level request/FD boundary hazard when earlier requests remain b
 - Platform matrix: Linux AF_UNIX first; test other AF_UNIX implementations before enabling them. TCP/INET remain unsupported.
 
 No source code, protocol XML, generated binding or tests were changed. No implementation was authorized.
+
+
+
+
+## 30.21 — Proposed transport/API contract and implementation sequence
+
+Based on sections 30.18–30.20, the HDR path must not use the current unqualified \`WriteFdToClient()\` / \`ReadFdFromClient()\` FIFO semantics. The following is the proposed internal contract for a future implementation. Names and C signatures are illustrative; this is not an ABI or code change.
+
+### 1. Connection capability
+
+Provide an internal per-connection capability query (for example \`_XSERVTransCanPassFds()\`) that checks the selected transport's actual send and receive operations. It must not infer support solely from \`XTRANS_SEND_FDS\`, \`TRANS_LOCAL\`, peer address text, or loopback IP. Initial HDR support should be gated to Linux AF_UNIX stream sockets until equivalent marker-boundary semantics are tested on other platforms.
+
+### 2. Receive API: bytes plus ordered FD groups
+
+Replace the internal FIFO-only receive contract for new users with an operation that preserves both stream bytes and FD-group positions. Conceptually:
+
+\`\`\`c
+struct XtransFdGroup {
+    uint64_t marker_offset; /* absolute connection byte offset */
+    unsigned int nfds;
+    int *fds;
+};
+
+struct XtransReadResult {
+    size_t nbytes;
+    size_t ngroups;
+    struct XtransFdGroup *groups;
+};
+\`\`\`
+
+The transport owns descriptors until it successfully returns a group to the OS layer. On return, ownership transfers to the caller. If cmsg parsing, allocation, or offset association fails, close all received descriptors and fail the connection; never return a partial group as valid.
+
+For Linux AF_UNIX, derive \`marker_offset\` from the documented stream barrier: \`read_stream_offset + recvmsg_returned_bytes - 1\`. Increment the stream offset by every positive byte count, whether or not ancillary data was present. Reject \`MSG_CTRUNC\`, malformed/unsupported cmsgs and zero-byte ancillary delivery. Validate the full SCM_RIGHTS group before exposing it.
+
+The Xserver input layer records absolute request start/end offsets while parsing. It accepts a group only when its marker is exactly at the first byte of one FD-bearing request and its count matches the request's declared count. It rejects groups in request bodies, on requests that declare no FDs, duplicates, extras and missing groups. This validation is independent of the legacy \`ClientRec.req_fds\` remaining counter.
+
+### 3. Send API: ordered output segments
+
+Do not model outgoing FDs as “attach to the next transport write”. The output layer needs an ordered marker tied to the exact first byte of the reply/request segment that owns the descriptors. Conceptually, a private operation appends \`(reply bytes, FD group)\` as one ordered output segment, or stores an absolute output-stream marker in the per-client output queue.
+
+When flushing:
+- write all bytes before the marker without those FDs;
+- call \`sendmsg()\` with the FD group when the marker byte is the first byte of the pending stream;
+- on EAGAIN before any byte is sent, retain the group and its ownership;
+- after a positive sendmsg result, the ancillary group has been transferred with the marker byte; retire the group and continue any partial byte remainder normally;
+- on fatal failure or client teardown, close every still-owned local FD exactly once.
+
+A new private DIX helper (for example \`dixWriteToClientWithFds()\`) is preferable to changing the public legacy \`WriteFdToClient()\` contract. Existing DRI3 callers and proprietary NVIDIA DDX must retain their current ABI and behavior. The new HDR extension alone uses the ordered helper until a deliberate, separately reviewed legacy transport fix is justified.
+
+### 4. libxcb request-side prerequisite
+
+The current libxcb source should be fixed or wrapped so an FD group cannot be attached to earlier buffered requests. The minimal safe strategy is to flush all prior queued bytes before staging the group, then atomically stage the group and append its own request while holding the connection's output serialization. Because a flush may release the I/O lock while waiting for a writer, the implementation must re-check and drain any bytes queued by another thread before committing the FD group; it must not leave a race window between the final drain and request append.
+
+An alternative is a request-offset-aware FD marker in libxcb's output queue. Either approach must preserve current API FD ownership rules and handle partial writes, EAGAIN, concurrent writers, queue-full cases and shutdown. Do not document an application-side \`xcb_flush()\` requirement as a workaround unless the library contract explicitly adopts and tests it.
+
+### 5. Scope and compatibility
+
+- Keep these helpers private to Xserver OS/DIX internals and the paired in-tree libxcb implementation until the semantics and tests are stable.
+- Do not add mandatory driver callbacks, change \`ScreenRec\`, alter \`PRIVATE_LAST\`, or require proprietary NVIDIA HDR support.
+- Existing \`ReadFdFromClient()\` / \`WriteFdToClient()\` remain available for legacy DRI3 paths; any generic Xtrans repair must preserve their established ownership contract.
+- No FD support, no verified stream-boundary support, queue allocation failure, truncation or any ambiguous state means HDR handoff unavailable for that connection. Legacy SDR/Composite behavior continues.
+
+### 6. Implementation order once explicitly authorized
+
+1. Build a small AF_UNIX stream reproducer for ancillary marker offsets, pipelined X requests, read-ahead, and multiple SCM_RIGHTS groups. Confirm Linux behavior and document platform assumptions.
+2. Add Xtrans receive-side offset groups, strict cmsg/MSG_CTRUNC handling, allocation-failure propagation and transport tests.
+3. Add output byte-marker ordering and a private DIX ordered-FD reply helper; test buffered earlier output, two replies, partial writes and EAGAIN.
+4. Fix or coordinate libxcb request-side ordering and add a regression test with a prior buffered request before an FD-bearing request.
+5. Add an X server/XCB round-trip extension test for valid, malformed and adversarial FD placement/count cases.
+6. Only then freeze the HDR Composite XML schema and generated bindings against the proven transport contract.
+
+No source code, protocol XML, generated binding or tests were changed. No implementation was authorized.
