@@ -1623,3 +1623,39 @@ These are proposed v1 limits and wire semantics, not frozen protocol ABI. They s
 #### Verification limits
 
 Source review confirms libxcb's generic request/reply FD machinery and generated-binding support. It does not yet verify a concrete Xlibre color-management XML schema, generated client library, runtime transport on every supported platform, or compositor interoperability. The current XCB source's `HAVE_SENDMSG` conditional means FD support must remain an explicit runtime/build prerequisite. No Xserver source code has been changed.
+
+### 30.14 Compositor authority and Composite redirect ownership
+
+Xserver master was inspected at `9f1d28b59b6af78033b7f0d0c170935308de046f`, including `Xext/composite/compext.c`, `compalloc.c` and `compint.h`.
+
+#### Existing Composite ownership model
+
+- `CompWindowRec` stores a per-window linked list of `CompClientWindowRec` registrations. Each registration carries a resource XID and update mode; the owning client is encoded by the resource's client ID.
+- `compRedirectWindow()` rejects a second `CompositeRedirectManual` registration for the same window with `BadAccess`. It does not impose a single global Composite owner per screen.
+- Multiple `CompositeRedirectAutomatic` registrations can coexist on one window. Therefore automatic redirection does not identify one unambiguous compositor consumer.
+- `compRedirectSubwindows()` registers each existing child through `compRedirectWindow()` and records a separate parent-level subwindows resource. Newly created children are subsequently redirected for each registered subwindows client.
+- Client-owned redirect resources are freed through the Composite resource destructors and `compFreeClientWindow()` / `compFreeClientSubwindows()`; the per-window registration is removed when the resource is freed.
+
+Consequently, a screen-wide compositor owner cannot be inferred merely from the fact that a client has Composite access, has named a window pixmap, or that a window is redirected. Nor should the new extension treat automatic redirection as an exclusive lease.
+
+#### Proposed v1 authority model
+
+1. Add an explicit `AcquireCompositor(screen)` operation to the new color-management extension. It claims the color-managed compositor role exclusively for that X client on that screen. A second client receives `BadAccess`/a defined already-owned result. The claim is tied to a client-owned X resource so normal client teardown releases the claim automatically.
+2. A successful screen claim alone does not grant access to arbitrary windows. `SubscribeWindow` and every `AcquireBuffer` must additionally verify that the same client is the `CompositeRedirectManual` owner of that exact window.
+3. Implement the owner check through a small Composite-private query helper over the existing per-window registration list. Do not duplicate or mutate Composite's ownership records in the HDR extension, and do not change legacy Composite wire behavior.
+4. V1 accepts only manual redirection by the claimed compositor. Automatic redirection, windows manually redirected by another client, unredirected windows and windows on a different screen are not eligible for the color-managed stream. They continue to use existing Composite behavior.
+5. The `_NET_WM_CM_Sn` selection convention may be used by compositor software for discovery, but it is not the server's authorization primitive. The extension's client-owned claim plus the per-window Composite manual-owner check is the server-enforced authority.
+6. On manual unredirect, redirect-owner resource destruction, window destruction or screen teardown, revoke that window's stream and stop new buffer acquisitions. Already published generations remain leased until correctly released or quarantined under the existing disconnect/teardown rules.
+7. If the compositor disconnects, its screen claim is released by resource cleanup, but this does not release outstanding physical buffer leases. A replacement compositor receives a new connection epoch; delayed releases from the old client are rejected.
+
+#### Why screen claim and per-window owner check are both needed
+
+The screen claim prevents two different clients from simultaneously acting as the HDR compositor even if they redirect disjoint sets of windows. The per-window check prevents the claiming client from acquiring buffers for windows that it does not own through Composite manual redirection. This is intentionally stricter than the legacy Composite API and applies only after explicit color-management negotiation.
+
+#### Open compatibility questions
+
+- PanoramiX/Xinerama maps logical root/window identities across physical screens; the exact scope of `AcquireCompositor` (logical screen versus underlying ScreenRec) must be designed with the existing PanoramiX request translation.
+- Some compositors may use automatic redirection or a mixed strategy. V1 should report those windows unsupported rather than guessing ownership. Supporting them later requires an explicit, unambiguous consumer authorization model.
+- The exact Composite-private helper location and lifecycle callback ordering need a source-level patch design and tests. Do not expose a new public DDX callback or change `ScreenRec`.
+
+This authority model is a proposal, not owner-approved protocol ABI. No Xserver source code has been changed.
