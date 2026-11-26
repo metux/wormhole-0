@@ -481,3 +481,21 @@ Inspection of the failed `Check Signed-Off-By` job logs and the action source cl
 - Opened draft [PR #4233](https://github.com/X11Libre/xserver/pull/4233), branch `ci/fix-signoff-action-permissions`, head `34444903c2caa2d29e5f576973793109c4b0258b`. It grants `pull-requests: write` only to the sign-off job, enabling the action's required PR API/comment access without widening build-job permissions.
 - Exact-head workflow run `45882365691` was queued at the last check. This PR itself is unsigned and should cause the action to report a DCO violation once comment permission works; that is expected and does not waive DCO.
 - Important: the existing sign-off failures are not merely harmless infrastructure noise. The action logs indicate it found at least one unsigned commit and then could not post its explanatory comment. After #4233 is validated, rerun checks on #4230–#4232 and add valid `Signed-off-by` trailers where missing. Do not merge until the actual DCO check passes.
+
+
+## 2026-11-26 — Authorized DCO sign-off and replacement PRs
+
+The owner explicitly authorized ChatGPT to apply the owner's DCO sign-off to these Xserver contributions. The identity was verified against existing signed commits in X11Libre/xserver:
+
+`Signed-off-by: Enrico Weigelt, metux IT consult <info@metux.net>`
+
+To avoid rewriting/force-pushing existing PR branches (the collaboration protocol prohibits force-push), created one-commit replacement branches from the same master base. Each replacement commit has the exact same Git tree as its predecessor PR head, parent `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`, and the authorized DCO trailer. GitHub API verification confirmed both commit author and committer as `Enrico Weigelt <info@metux.net>` and the trailer in the commit message.
+
+| Original draft | Signed-off replacement | Replacement head |
+|---|---|---|
+| #4230 | [#4234](https://github.com/X11Libre/xserver/pull/4234) | `ec8356ff43d5f5674983238bbb7cb7d62ff71a9a` |
+| #4231 | [#4235](https://github.com/X11Libre/xserver/pull/4235) | `6499dc22620a0378c76a083a7c0afa028060eead` |
+| #4232 | [#4236](https://github.com/X11Libre/xserver/pull/4236) | `e73f28888e3c6070ed6d208af5bd3eb557f29ae9` |
+| #4233 | [#4237](https://github.com/X11Libre/xserver/pull/4237) | `d9bdcdd8a505dfc7586ed057993211232dc070c7` |
+
+All four replacement PRs are draft, each contains exactly one commit, and CI was queued on their exact heads. The original PRs remain open but now link to the replacements; do not close them until the replacement CI and DCO checks are verified. No local Xserver build/test run is claimed.
