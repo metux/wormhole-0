@@ -1044,3 +1044,74 @@ Further inspection of `drmmode_crtc_get_fb_id()`, `drmmode_glamor_handle_new_scr
 - The current gamma-LUT update uses a CRTC property write, while CTM is set separately; the inspected atomic modeset request does not yet bundle a complete color-pipeline state with framebuffer/mode changes. Any future color transform update must define atomicity with mode, connector, plane and framebuffer state rather than relying on these legacy gamma controls.
 
 Consequences for the no-compositor proposal: per-CRTC transforms are a plausible optimization for extended-desktop outputs with distinct CRTCs, but clone mode, connector-specific requirements, direct scanout, cursors and auxiliary planes remain separate cases. The safe fallback remains the existing SDR path.
+
+
+## 29. ScreenRec ABI boundary and optional private operation tables
+
+### 29.1 Owner direction
+
+**Owner preference (2026-11-26):** if HDR requires new screen/backend operations, do not add fields to `ScreenRec`. Prefer an additional private attachment through the existing DIX `devPrivates` mechanism, with a versioned operations table. This is the preferred design direction, subject to the constraints below.
+
+### 29.2 The three ScreenRec mechanisms are not interchangeable
+
+Current `include/scrnintstr.h` has:
+- `void *devPrivate`: the legacy single opaque DDX-private pointer. Do not repurpose it for HDR or overwrite driver-owned contents.
+- `PrivateRec *devPrivates`: the DIX-managed private-key store. This is the appropriate existing attachment point for new server-owned screen-private state.
+- `DevPrivateSetRec screenSpecificPrivates[PRIVATE_LAST]`: per-screen private allocation bookkeeping for other object types. Do not add a new `DevPrivateType` merely to host HDR screen operations.
+
+Use the existing `PRIVATE_SCREEN` type and `dixRegisterPrivateKey()`, then access the private with `dixLookupPrivate(&pScreen->devPrivates, key)` / `dixSetPrivate()` according to whether the key reserves inline storage or a pointer slot. The DIX layer owns `devPrivates`; never manipulate its layout or allocation directly.
+
+For a new HDR implementation, the preferred shape is a core-owned screen-private record containing:
+- an operations-table ABI version and structure size;
+- a capability bitset (advertise only operations fully implemented by this screen/backend);
+- a copied, immutable operations table for the registered version;
+- an opaque backend context pointer, if required;
+- explicit registration/teardown state.
+
+The operations table is optional. No registration means no HDR backend operations for that screen. A missing operation or capability must be handled as unsupported and leave the legacy SDR path operational.
+
+### 29.3 ABI and lifetime constraints
+
+- Do not add or reorder any `ScreenRec` fields, including tail fields, for this feature.
+- Do not add a value to `DevPrivateType` / `PRIVATE_LAST`: `PRIVATE_LAST` sizes the in-struct `screenSpecificPrivates[]` array, so changing it changes `ScreenRec` size and offsets of following members.
+- Do not alter the position, presence, or conditionality of `reserved_for_nvidia_470_and_390`.
+- Do not write to the legacy `devPrivate` field or directly change `devPrivates`.
+- Keep the private key and private-record lifetime owned by the Xserver core, not by an unloadable DDX module. A DDX must not leave a key object or callback-table storage in module static memory that can become invalid if the module is unloaded/reloaded.
+- Copy the registered table into core-owned private storage; validate version, size, mandatory members, and capability/member consistency before publishing it. Do not retain a pointer to a caller's temporary table.
+- Define callback-context ownership and teardown. Unregister/disable callbacks before backend teardown; no callback may run after the backend context or DDX code is unloaded.
+- Prefer private/internal headers and exports for the first in-tree modesetting implementation. Do not expose a public third-party driver API until its semantics and compatibility contract are stable.
+- Adding an exported helper symbol is additive for old modules that do not reference it, but a new external module that calls it requires a server providing that symbol. Decide ABI minor-version policy before publishing such an API.
+- Registration/allocation failure disables the optional HDR capability for that screen; it must not fail server startup or damage normal screen operation.
+
+### 29.4 Existing NVIDIA ABI accommodation is especially sensitive
+
+The current Xserver explicitly supports legacy proprietary NVIDIA DDX layout expectations:
+
+- `include/scrnintstr.h` conditionally contains `reserved_for_nvidia_470_and_390` between `NameWindowPixmap` and `totalPixmapSize` under `CONFIG_LEGACY_NVIDIA_PADDING`.
+- `meson_options.txt` exposes `legacy_nvidia_padding` (default false). Its description says it adds padding to `ScreenRec` to match an older ABI.
+- `include/xf86Module.h` selects Video Driver ABI 28.1 with that option and 28.0 without it.
+- `hw/xfree86/loader/loader.c::LoaderGetABIVersion()` has a specific compatibility path: when the padding option is enabled and the module is identified as proprietary NVIDIA, it reports `ABI_NVIDIA_VERSION` 25.2. The comments explain that 470 knows the older `ScreenRec` layout and modern 570 drivers can select the corresponding old/new code path.
+- `dix/pixmap.c` initializes the reserved field to NULL. Preserve this behavior.
+- The separate `legacy_nvidia_340x` option controls extra old 340x entry points; do not conflate it with the ScreenRec padding option.
+
+These are deliberate compatibility shims, not spare extension slots. HDR must not change their field offset, initialization, compile-time selection, or loader ABI decision logic. Do not "simplify" or remove them as part of HDR work.
+
+### 29.5 Registration timing and private allocation
+
+The current `dixRegisterPrivateKey()` implementation explicitly supports `PRIVATE_SCREEN` keys after screens already exist: its `allocated_early[PRIVATE_SCREEN]` handler walks both regular and GPU screens and fixes up their private allocations. This makes the existing mechanism suitable for optional late registration without changing `ScreenRec` layout. It can still fail on allocation; handle that as a per-screen feature-unavailable result.
+
+Use a core-owned static key and a core-owned initialization/registration helper. The driver-facing call, if any, should only submit a versioned operations table and backend context to that helper. This avoids module-owned key lifetime and keeps DDX-specific state out of the public `ScreenRec`.
+
+### 29.6 Compatibility and regression test matrix
+
+At minimum, before merging the first implementation:
+
+1. Build with `-Dlegacy_nvidia_padding=false` and `true`; verify the pre-existing Video Driver ABI selection and ScreenRec reserved-field layout remain unchanged in both configurations.
+2. With the HDR feature compiled in but not negotiated, run the normal SDR path with modesetting and with the proprietary NVIDIA DDX on real supported driver/GPU combinations. NVIDIA HDR support is not required.
+3. Exercise proprietary NVIDIA 470 and a modern dual-ABI driver (e.g. 570) with the padding compatibility configuration where applicable; verify the loader selects the expected ABI path. Do not claim this from a compile-only test.
+4. Verify no HDR registration is required for a DDX to initialize, and that absent/unsupported operations are reported as unavailable without changing Composite, Damage, Present, DRI3, RandR, cursor, or scanout behavior.
+5. Exercise private-key registration with already-created regular and GPU screens, allocation failure, screen close/re-init across server generations, and backend teardown. Confirm no stale callbacks or private pointers survive.
+6. Verify `sizeof(ScreenRec)`, relevant `offsetof(ScreenRec, ...)` values, `PRIVATE_LAST`, and the conditional NVIDIA padding layout are identical to the pre-HDR baseline for each build configuration.
+7. Test both no-compositor and compositor paths with the HDR feature absent, unsupported, and negotiated. The unsupported case must be visually and behaviorally equivalent to the legacy SDR path.
+
+This is a design/ABI constraint, not implementation authorization.
