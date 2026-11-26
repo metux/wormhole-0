@@ -17,11 +17,12 @@ the ship as `working`. Progress and completion are recorded through the
 existing task lifecycle commands. A ship that cannot or will not accept the
 assignment must communicate that rather than appearing to work on it.
 
-Plugin heartbeats are liveness updates only. They must not infer or overwrite
-task association or lifecycle-owned board status from a plugin-local cache.
-Explicit task lifecycle operations remain authoritative. The plugin may report
-active assistant processing as `working`, but a heartbeat must not reset that
-state or the task association.
+Plugin startup, session recreation, model-activity telemetry, and heartbeats
+must not infer or overwrite task association or board status. They refresh
+process/model liveness metadata only and preserve an existing status/task
+record; a new ship with no prior record defaults to `idle`. Task status is
+changed only by explicit task lifecycle operations or explicit Comms status
+commands.
 
 The Dashboard-Topic marker remains in commission messages as a reference.
 Explicit `task <slug>` / `task clear` commands remain supported as manual
@@ -46,6 +47,6 @@ Separating reference, acceptance, and liveness removes those false transitions.
   directives and does not auto-adopt their topics.
 - The task skill and Comms SOP explain the reference-only marker and explicit
   acceptance step.
-- Regression tests cover marker handling and ensure heartbeats do not send
-  state/task fields.
+- Regression tests cover marker handling and ensure plugin startup, model
+  activity, and heartbeats do not send inferred state/task fields.
 - This decision supersedes the former automatic marker-based task adoption.
