@@ -2078,3 +2078,15 @@ HDR should initially follow the same proven DRI3-style ordered FIFO model: decla
 Do not require per-byte marker offsets or introduce a second transport API unless a concrete HDR use case demonstrates that FIFO ordering is insufficient. Do add regression coverage for multiple adjacent FD-bearing requests, ordinary requests between them, read-ahead, mismatched counts, unexpected extra groups, and output backpressure. Keep any generic Xtrans hardening additive and compatibility-tested.
 
 Sections 30.20–30.21 are superseded where they prescribe exact receive marker offsets as a universal requirement or propose replacing the legacy FIFO API. Section 30.22 remains correct only in its narrow statement that a coalesced `recvmsg()` byte count does not reveal the marker's exact byte offset.
+
+
+## 30.24 — Xtrans FD queue allocation failure hardening (PR pending)
+
+Xserver PR [#4232](https://github.com/X11Libre/xserver/pull/4232) proposes an additive repair for the existing FIFO implementation:
+
+- `appendFd()` returns `-1` with `ENOMEM` when queue-node allocation fails and does not close the descriptor. This preserves caller ownership on a failed send-queue operation.
+- `_XSERVTransSocketSendFd()` propagates the result instead of reporting success after a failed append.
+- On receive-side append failure, Xtrans closes the descriptor that failed to queue, all remaining descriptors in that `recvmsg()` ancillary data, and all descriptors already queued for the connection; the read fails with the original `ENOMEM` rather than returning bytes with an incomplete FIFO.
+- Linux unit tests use the real Xtrans local transport entry points and linker-wrapped `malloc()` to fail the first send append and the second append in a multi-FD receive. They check caller ownership on send failure, closure of every received FD (including a previously queued FD), and an empty receive FIFO after failure.
+
+This is proposed, not merged or validated yet. PR #4232 is draft; no local Xserver build/test has been run. CI results must be checked on its exact head before treating the fix as verified. It is separate from PR #4231's `MSG_CTRUNC` handling, and both modify `os/Xtranssock.c`; reconcile/rebase if both are accepted.
