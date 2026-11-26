@@ -110,7 +110,7 @@ A window can span outputs or move between outputs. Therefore, the per-window tra
 
 The default architectural direction is a common, linear-light working space with sufficient range and precision for the supported SDR/HDR sources. The final output transform (gamut mapping, tone mapping, output transfer encoding and output metadata) is separate.
 
-**OPEN — owner decision:** Select the exact working-space primaries, white point, numeric range, reference-white convention and pixel representation. Candidate approaches include a linear wide-gamut RGB space and a scene-referred/scRGB-like representation. No exact choice is approved by this draft.
+**Owner decision (2026-11-26):** the compositor-facing working space is fixed as linear BT.2020 / D65, output-independent, with neutral RGB 1.0 = 203 cd/m². The negotiated compositor handoff is RGBA IEEE-754 binary16 (FP16), linear premultiplied alpha. Capability negotiation, fallback and wire-level lifecycle details remain open; see sections 24–26.
 
 **OPEN — compositor contract:** Determine how the compositor discovers and consumes the working-space definition, and how legacy compositors behave when they do not understand the new contract.
 
@@ -166,12 +166,7 @@ The server validates all client-provided values. Reject malformed descriptions, 
 
 Pixel storage format and colorimetry are separate concepts. A 10:10:10:2 buffer does not, by itself, mean BT.2020 or PQ. Likewise, FP16 does not define a color space.
 
-**OPEN — owner decision:** First supported client-facing HDR format:
-- packed 10-bpc RGB in the existing 32-bit pixel model; or
-- FP16 RGBA as a required first-class client format; or
-- a staged approach where packed 10-bpc is the first client format and FP16 is used internally / added later.
-
-A practical staged proposal is to support existing packed 10:10:10:2 / 30-bit TrueColor-compatible output where supported, while using a higher-precision floating-point intermediate where available. Client-visible FP16 need not block an initial HDR10 path.
+**Scope distinction / owner decision:** the compositor-facing transformed handoff is negotiated RGBA FP16, as approved in section 24. This does **not** mean ordinary core pixmaps or all client source buffers become FP16. Client source formats remain separately capability-negotiated; existing packed 10:10:10:2 / 30-bit paths may be supported where appropriate. Pixel format and colorimetry remain separate.
 
 The implementation must define alpha representation (straight vs premultiplied), channel order, component range, dithering and quantization. It must preserve alpha semantics while transforming color channels. For premultiplied inputs, conversion must correctly handle un-premultiplication/re-premultiplication or an equivalent mathematically correct operation, including zero-alpha pixels.
 
@@ -647,7 +642,7 @@ Dynamic per-frame metadata must be attached atomically to the corresponding Pres
 
 PQ and HLG are distinct transfer functions and require distinct reference/peak luminance definitions. The protocol must not treat one as an alias for the other.
 
-## 21. Color transform and compositor handoff (proposal; OPEN)
+## 21. Color transform and compositor handoff (approved semantics; wire contract open)
 
 ### 21.1 Transform semantics
 
@@ -670,7 +665,7 @@ The compositor-facing contract must specify:
 
 A color-managed compositor cannot receive a mixture of transformed HDR buffers and untransformed legacy SDR buffers while being told that all buffers share one working-space interpretation.
 
-**OPEN — compatibility policy:** define a deterministic legacy source interpretation for windows without explicit color metadata (for example, a documented sRGB assumption or a server-configured legacy profile). When the compositor negotiates the color-managed handoff, the X server must transform legacy windows according to that policy as well. If the policy cannot be applied safely, the server must keep the legacy Composite path rather than silently mixing incompatible representations.
+**Owner-approved legacy interpretation:** windows without explicit color metadata use sRGB/D65 and the session-wide configurable LegacySDRReferenceWhite policy defined in section 25. When the compositor negotiates the color-managed handoff, the X server transforms legacy windows according to that policy as well. If the policy cannot be applied safely, the server must keep the legacy Composite path rather than silently mixing incompatible representations.
 
 A compositor that has not negotiated the new handoff continues to receive the existing legacy Composite representation unchanged.
 
@@ -705,14 +700,14 @@ The extension should be split internally into independent capability groups so a
 6. **Working space:** select exact primaries, white point, reference-white convention, numeric range and compositor buffer format?
 7. **Transfer-function scope:** select which transfer functions are mandatory in v1 (sRGB/linear/PQ/HLG) and define their luminance semantics?
 
-All proposals in sections 18–23 remain draft until the owner explicitly approves them. No Xserver implementation is authorized by this document.
+Unapproved portions of sections 18–23 remain draft. Owner-approved design decisions are recorded in sections 21 and 24–26 and in durable decision files; they do not freeze the wire ABI. No Xserver implementation is authorized by this document.
 
 
-## 24. Common linear working space (proposal; owner approval pending)
+## 24. Common linear working space (owner-approved design; protocol details open)
 
 ### 24.1 Recommended v1 definition
 
-**Recommendation:** define one fixed, output-independent, absolute-linear RGB working space for the color-managed Composite handoff:
+**Owner-approved definition:** one fixed, output-independent, absolute-linear RGB working space for the color-managed Composite handoff:
 
 | Property | Proposed v1 value |
 |---|---|
@@ -764,7 +759,7 @@ For PQ/ST 2084, the transfer function provides an absolute luminance interpretat
 
 For HLG, the transfer function alone is insufficient to determine a unique absolute display luminance mapping in all viewing environments. The protocol must define the required HLG system gamma / nominal peak / viewing assumptions before HLG sources can be advertised as fully supported. Until then, a server must not silently treat HLG as PQ or invent a peak-luminance assumption.
 
-For SDR sources, the Color Description's reference-white luminance determines how encoded SDR white maps into the common working space. The default reference white for legacy unmanaged windows remains a separate owner decision; do not assume that choosing 203 as the working-space scale settles legacy SDR brightness.
+For SDR sources, the Color Description's reference-white luminance determines how encoded SDR white maps into the common working space. For unmanaged legacy windows in the HDR color-managed compositor path, the owner-approved implicit source is sRGB/D65 with a session-wide configurable LegacySDRReferenceWhite default of 203 cd/m²; 80 and 100 cd/m² remain configurable alternatives. This is separate from the working-space scale and is never per-output.
 
 ### 24.5 Alpha and blending contract
 
