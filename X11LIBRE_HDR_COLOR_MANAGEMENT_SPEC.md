@@ -794,7 +794,7 @@ The pixel format states whether an alpha channel exists and how it is stored. Th
 4. Approve linear premultiplied alpha as the compositor-facing contract.
 5. Select the chromatic-adaptation method.
 6. Define HLG system-gamma / nominal-peak interpretation before advertising HLG support.
-7. Define the default absolute reference white for legacy SDR windows.
+7. The legacy SDR default is now owner-approved in section 25: 203 cd/m², session-configurable and not per-output.
 8. Define the policy for NaN/infinity values in client-provided floating-point buffers.
 
 Section 24 is a design recommendation, not yet an owner-approved normative ABI. No Xserver implementation is authorized by this section.
@@ -853,3 +853,66 @@ Still open: exact configuration interface/range, chromatic-adaptation method, HL
 The default above is specifically for the **HDR color-managed composition path**. It must not be confused with the conventional sRGB reference-display viewing condition, where sRGB white is commonly described as 80 cd/m². When legacy SDR content is mixed with HDR content, the proposed default anchors its white/graphics-white level to 203 cd/m² HDR reference white. The setting allows users or session policy to select a lower luminance (including 80 or 100 cd/m²) when desired.
 
 This distinction is important because the implicit source profile's transfer function/primaries and the luminance assigned to its white are separate semantics. The legacy default remains sRGB/D65; only its session-level reference-white mapping is configurable.
+
+
+## 26. Chromatic adaptation and source-to-working transform (proposal; owner approval pending)
+
+### 26.1 Recommended chromatic-adaptation method
+
+**Recommendation: use the linear Bradford chromatic adaptation transform (CAT) as the single mandatory v1 method for relative-colorimetric source RGB descriptions whose declared white point differs from D65.** Use full adaptation (degree of adaptation = 1); do not expose CAT selection or degree-of-adaptation as a per-window or per-output tuning knob in v1.
+
+Rationale:
+- ICC.1:2022 recommends linear Bradford when there is no specific reason to choose another CAT, citing broad implementation and demonstrated visual performance.
+- Different CATs produce different results; fixing one method avoids inconsistent output across server backends, compositors and drivers.
+- Bradford is widely deployed in profile-based color management and is therefore a practical interoperability baseline.
+- CAT16 is a valid later research/extension candidate, but there is no established requirement in this desktop source-to-common-working-space use case that justifies making it the v1 default or adding a negotiation axis now.
+
+The algorithm is the linear Bradford model described in ICC.1:2022 Annex E (not an implementation-specific approximation). Given normalized source and destination white XYZ vectors Ws and Wd (both with Y=1), and the ICC linear Bradford cone-response matrix B, compute:
+
+`M_CAT = inverse(B) * diag((B*Wd).x/(B*Ws).x, (B*Wd).y/(B*Ws).y, (B*Wd).z/(B*Ws).z) * B`
+
+Apply `M_CAT` to XYZ values after transfer decoding and source RGB-to-XYZ conversion. The destination white is D65. If the source white is already D65, skip adaptation (identity transform). Do not apply a second CAT later in the output path merely because the output has another white point; output adaptation, if any, belongs to the output transform.
+
+### 26.2 Relative versus absolute colorimetric meaning
+
+A white-point chromaticity does not by itself tell us whether the source values should undergo appearance adaptation or preserve absolute measured colorimetry. This distinction must be explicit in the source-description model before the wire ABI is frozen.
+
+Proposed rule:
+- Relative-colorimetric RGB source descriptions use the declared source white point and the fixed full Bradford transform to adapt that white to D65.
+- Absolute-colorimetric XYZ data, or a profile transform that already produces absolute colorimetric PCS values, must preserve its declared colorimetry and must not receive an additional implicit CAT.
+- ICC profile handling must follow the selected ICC rendering intent and profile/CMM transform semantics. If the ICC transform has already adapted the source to its PCS adopted white, Xlibre must adapt PCS to D65 exactly once, and must not separately reapply the profile's source-white adaptation matrix.
+
+The future Color Description protocol therefore needs an explicit, versioned way to distinguish relative source RGB semantics from absolute colorimetric data / already-adapted profile output. Do not infer this from transfer function, primaries, or buffer format alone.
+
+### 26.3 Proposed source-to-working pipeline
+
+For a relative-colorimetric RGB source with a valid Color Description:
+
+1. Interpret the source buffer according to its declared pixel format and alpha mode. Correctly unpremultiply encoded-premultiplied input before nonlinear transfer decoding; handle zero-alpha samples without leaking hidden RGB.
+2. Decode the declared transfer function into linear-light source RGB. PQ must resolve to absolute luminance; HLG remains unavailable until its system-gamma / nominal-peak semantics are specified.
+3. Convert linear source RGB to normalized source XYZ using the matrix derived from its declared primaries and white point.
+4. Apply full linear Bradford adaptation from the source white point to D65, unless the source white is already D65.
+5. Convert D65 XYZ to linear BT.2020 RGB.
+6. Apply the source reference-white / absolute-luminance scale and divide by 203 cd/m² to express the result in Xlibre Linear BT.2020 / 203. The exact placement of this scalar relative to the linear matrices is mathematically interchangeable, but the implementation must use one defined convention and preserve absolute luminance.
+7. Premultiply the resulting linear working RGB by linear alpha and write RGBA FP16. Do not clamp gamut excursions or values above 1.0.
+
+The implementation may combine steps 3–6 into a precomputed 3x3 matrix plus scalar for a given immutable Color Description. Such optimization must be numerically equivalent to the specified order and must not change semantics.
+
+### 26.4 Validation and numerical behavior
+
+- Source and destination white chromaticities must be finite and valid; reject invalid descriptions rather than silently substituting D65.
+- The CAT matrix must be finite and invertible. Reject a description if the resulting transform is singular or numerically unusable.
+- Identical source and destination white points must produce an identity CAT (within the defined canonical numeric representation).
+- Negative XYZ/working RGB components created by adaptation or gamut conversion are valid intermediates; do not clamp them.
+- No per-output or per-monitor CAT choice is permitted in the source-to-working transform.
+- Reference white is a luminance scale, not a chromatic adaptation parameter. Changing `LegacySDRReferenceWhite` must not change the CAT matrix.
+
+### 26.5 Open design questions
+
+1. Approve linear Bradford as the fixed v1 CAT for relative-colorimetric source RGB descriptions?
+2. Approve full adaptation only (no partial adaptation control in v1)?
+3. Define the explicit source-description distinction between relative-colorimetric RGB and absolute-colorimetric / already-adapted PCS data?
+4. Define ICC profile ingestion and CMM ownership so source adaptation occurs exactly once?
+5. Define validation tolerances and canonical white-point precision for identity detection and matrix caching?
+
+This section is a technical proposal only. It does not authorize Xserver implementation or freeze the extension wire ABI.
