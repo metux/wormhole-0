@@ -213,3 +213,18 @@ Configuration interface and allowed range remain open. If runtime changes are su
 A standards cross-check refined the default recorded above: the HDR color-managed compositor path should default legacy SDR white to **203 cd/m²**, not 80 cd/m². The W3C CSS Color HDR draft states that SDR content should be anchored to 203 cd/m² HDR reference white when composited with HDR. The conventional 80 cd/m² sRGB reference-viewing value remains a valid configurable lower setting, as does 100 cd/m².
 
 Thus the session-wide `LegacySDRReferenceWhite` default is 203 cd/m²; it is configurable (e.g. 80 or 100 cd/m²), never per-output. The implicit profile remains sRGB/D65. Explicit Color Descriptions override the legacy default. See spec section 25.5 for the distinction between SDR reference-display viewing and HDR composition.
+
+
+## 2026-11-26 — Chromatic-adaptation design investigation
+
+A proposal was added to section 26 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md`:
+
+- Recommend ICC linear Bradford as the single v1 chromatic-adaptation method for relative-colorimetric RGB sources whose white point differs from D65; full adaptation, no per-window/per-output CAT selector.
+- CAT16 remains a possible later research/extension candidate, not a v1 choice absent a concrete requirement.
+- Preserve absolute-colorimetric XYZ / already-adapted PCS data; never apply CAT twice. ICC CMM/profile-intent semantics need an explicit integration contract.
+- Proposed order: alpha interpretation → transfer decode → source RGB-to-XYZ → Bradford to D65 (if needed) → XYZ-to-linear-BT.2020 → absolute luminance scaling / divide by 203 → linear premultiply → RGBA FP16.
+- Source white point, reference-white luminance and pixel format remain separate concepts.
+
+Evidence: ICC.1:2022 clauses 6.2 and Annex E recommend linear Bradford where there is no reason to choose another method, citing broad implementation and excellent visual performance. W3C CSS Color 4 (2026-11-12 CRD) uses linear Bradford for D65/D50 conversions and specifies the transform pipeline from linear RGB through XYZ with adaptation where needed. Sources: ICC.1:2022, https://www.color.org/specifications/ICC.1-2022-05.pdf; W3C CSS Color 4, https://www.w3.org/TR/2026/CRD-css-color-4-20261112/.
+
+Owner approval remains pending for the CAT choice, full-adaptation policy, relative-vs-absolute source semantics and ICC/CMM ownership. No Xserver implementation was changed or authorized.
