@@ -256,8 +256,8 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - **Event pipeline replacement:** [PR #32](https://github.com/mpbt-hq/starfleetctl/pull/32), branch `feat/comms-event-pipeline-rebased`, head `148f28e2e24d81b9528640217823c63bedda1723`, open/Draft. Based on master `6e693d1...`, ahead 7 / behind 0, 14 changed files. It preserves the six semantic commits from old PR #25 as the second parent of a replacement merge commit; old published branch was not force-pushed or rewritten.
   - Reconciled the two overlapping plugin files with PR #29: no Dashboard-Topic auto-adoption/currentTask cache, heartbeat is liveness-only, startup init precedes PID/liveness refresh, and inferred `working` writes were removed.
   - Removed obsolete regex-only tests expecting auto-adoption; carries forward PR #29's task-marker test and its invocation from `scripts/check-opencode-plugin.sh`; all other non-overlapping PR #29 changes are included from master.
-  - Exact-head Actions run `45815962061` was in progress at checkpoint; plugin-typecheck and Go 1.22.x jobs had passed, stable Go tests were still running. No local tests were run. Keep Draft pending full green CI and detailed review.
-- Old PR #25 remains open until PR #32's exact-head CI is fully verified, then close it as superseded and cross-link. No merge of #32 authorized.
+  - Exact-head Actions run `45815962061` completed successfully: plugin-typecheck and Go build/vet/full tests on stable and Go 1.22.x all passed. No local tests were run. PR #32 remains Draft pending independent review.
+- Old PR #25 was closed as superseded after PR #32's exact-head CI passed; the old branch/history remains preserved. PR #32 now documents the replacement and green CI. No merge of #32 authorized.
 - Branch inventory after PR #29:
   - `feat/comms-event-pipeline-clean-history` remains old PR #25 head `30b8b3dc2f3d4f3e1a2609a63bd11f1a6995056f`; preserved, not force-pushed.
   - `feat/comms-event-lifecycle` and `feat/comms-event-pipeline` both remain at `d161b1b81292d11c5f375684db05df1d59c7f9e1`, same superseded PR #23 implementation tree, 84 commits ahead / 1 behind master, with no unique lifecycle implementation. Do not treat either as an independent lifecycle implementation or blindly rebase it. Issue #24 remains open; create the active lifecycle branch from the resulting master after PR #32 is merged.
@@ -265,3 +265,14 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - Issue #24 has been updated with the dependency replacement and branch inventory. Its durable lifecycle/correlated-turn implementation has not started.
 - Owner's standing plugin invariant remains mandatory: every new plugin runtime/helper file must be discovered by bootstrap packaging and the source/embed/install parity tests in the same change.
 - No local worktree, local test run, ship restart, or force-push. No XAverius/Xserver work was touched.
+
+
+### Starfleetctl follow-up verification — 2026-11-26 12:06Z
+
+- Rechecked [PR #29](https://github.com/mpbt-hq/starfleetctl/pull/29): merged true at `6e693d1d14299763911783beb68b6a9d39a303f5`.
+- Rechecked [PR #31](https://github.com/mpbt-hq/starfleetctl/pull/31): open, ready for review, not merged; exact-head run `45815535581` completed success for plugin-typecheck and both Go test matrices.
+- Rechecked [PR #32](https://github.com/mpbt-hq/starfleetctl/pull/32): open, Draft, not merged; head `148f28e2e24d81b9528640217823c63bedda1723`, based on master `6e693d1...`, ahead 7 / behind 0; exact-head run `45815962061` completed success for plugin-typecheck and Go build/vet/full tests on stable and Go 1.22.x.
+- Closed old PR #25 as superseded (not merged), with a cross-link to PR #32. Its published branch `feat/comms-event-pipeline-clean-history` remains unchanged.
+- PR #32 body now records full green CI and the closure of old PR #25. PR #32 remains Draft; no merge performed.
+- Issue #30 links PR #31 and its test evidence. Issue #24 records that the two old lifecycle/event-pipeline refs are duplicate superseded PR #23 trees and that the active lifecycle branch should be created from master after PR #32 is merged.
+- Remaining branch inventory unchanged: `feat/comms-event-lifecycle` and `feat/comms-event-pipeline` both at `d161b1b81292d11c5f375684db05df1d59c7f9e1` with no unique lifecycle work; historical backup `0765d18...` stays untouched. No force-push, no local tests, no ship restart.
