@@ -5,8 +5,8 @@ Status: accepted by the project owner
 
 ## Decision
 
-A `(Dashboard-Topic `<slug>`)` marker in a Comms commission message is a
-navigation/reference link to the dashboard task only. Receiving, importing, or
+A `Dashboard-Topic` marker with a slug in backticks or single quotes in a
+Comms commission message is a navigation/reference link to the dashboard task only. Receiving, importing, or
 injecting that message does not mean the receiving ship has accepted or started
 the task. The marker must not automatically set the ship's current task or
 change its board status.
