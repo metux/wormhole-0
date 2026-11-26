@@ -2090,3 +2090,10 @@ Xserver PR [#4232](https://github.com/X11Libre/xserver/pull/4232) proposes an ad
 - Linux unit tests use the real Xtrans local transport entry points and linker-wrapped `malloc()` to fail the first send append and the second append in a multi-FD receive. They check caller ownership on send failure, closure of every received FD (including a previously queued FD), and an empty receive FIFO after failure.
 
 This is proposed, not merged or fully validated yet. PR #4232 is draft; no local Xserver build/test has been run. Exact-head workflow run 45881893934 is active: platform build jobs were queued/in progress at last check, while the Signed-Off-By action failed with `Resource not accessible by integration`. Check all build/test jobs on this exact head before treating the fix as verified. It is separate from PR #4231's `MSG_CTRUNC` handling, and both modify `os/Xtranssock.c`; reconcile/rebase if both are accepted.
+
+
+## 30.25 — Signed-Off-By CI permission diagnosis
+
+The failing `Check Signed-Off-By` job on #4230, #4231 and #4232 is not simply an unrelated infrastructure failure. The action logs show it enumerated the PR commits and then failed with `Resource not accessible by integration`. Inspection of `live627/check-pr-signoff-action@v1` shows it reads PR metadata/commits and, when unsigned commits are found, posts a PR comment. The workflow currently grants only `contents: write`; the sign-off job lacks permission to create that comment.
+
+Draft Xserver PR [#4233](https://github.com/X11Libre/xserver/pull/4233) grants `pull-requests: write` only to the sign-off job. Exact-head workflow run 45882365691 was queued at the last check. This should allow the action to report DCO violations correctly. The commits in the current draft PRs may themselves lack valid `Signed-off-by` trailers; do not merge until the repaired action runs and the actual DCO check passes. This workflow repair does not waive DCO.
