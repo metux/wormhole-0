@@ -1215,7 +1215,7 @@ Do not cache addresses into the DIX private allocation across further private-ke
 - supports partial updates only when source/destination synchronization and buffer-generation rules make them correct;
 - has no knowledge of connector-specific output transforms or KMS metadata.
 
-The provider table is the boundary between core and the active screen backend. The Glamor helpers are a separate private boundary between that provider and the GPU rendering implementation. Generic core must not directly call Glamor entry points. Glamor's core sources are built as an internal static-library target and consumed by the separately loaded Glamor EGL module; the modesetting DDX loads that module and resolves its entry points dynamically. The modesetting provider should therefore delegate through the DDX's resolved optional Glamor function pointers, without making Glamor a mandatory core dependency.
+The provider table is the boundary between core and the active screen backend. The Glamor helpers are a separate private boundary between that provider and the GPU rendering implementation. Generic core must not directly call Glamor entry points. Glamor and the modesetting DDX are built and deployed together from the same Xserver codebase as a matched set. Although the Glamor EGL module remains separately loaded, its internal HDR helper interface is a same-build interface, not an independently versioned third-party ABI. The modesetting DDX resolves the required helper symbols through the existing module loader and treats their absence as a broken/mismatched installation, not as a normal optional HDR capability result. Do not add optional-symbol probing or compatibility shims between the paired components. Runtime HDR availability remains optional: if Glamor initializes but FP16, shader, export, synchronization or other hardware/runtime probes fail, the provider simply does not register HDR capability. Generic core still has no mandatory Glamor dependency.
 
 For the first implementation, keep these interfaces private to the in-tree modesetting path. Do not add a mandatory callback to the public DDX SDK. The proprietary NVIDIA DDX does not register the provider and continues through its existing SDR path.
 
@@ -1279,7 +1279,7 @@ This provider is only the **source-to-common-working-space** path. It does not i
 
 Before implementation, the following must be separately reviewed and decided:
 1. exact core provider registration API and callback/error semantics;
-2. whether the first provider can safely own both Glamor transformation and export, or whether buffer transport requires a separate DDX sub-interface;
+2. whether the first modesetting provider should own both Glamor transformation and buffer export, or whether buffer transport requires a separate internal DDX sub-interface;
 3. exact FP16 external buffer formats/modifiers supported by the compositor transport and modesetting stack;
 4. source-buffer access and completion guarantees for GLX/DRI3/Present paths;
 5. Composite extension negotiation, generation/release protocol and compositor restart behavior;
@@ -1291,7 +1291,7 @@ No Xserver source code has been changed by this design work. This section does n
 
 ### 30.9 Verified modesetting / Glamor module lifecycle
 
-The current modesetting DDX source at the inspected HEAD makes the integration point more concrete:
+The current modesetting DDX source at the inspected HEAD makes the integration point more concrete: The user confirms that modesetting and the Glamor module are always built and deployed together from the same codebase. Accordingly, the internal HDR helper interface between these paired components is not treated as an independently versioned optional module ABI:
 
 - `hw/xfree86/drivers/video/modesetting/driver.c::load_glamor()` loads `GLAMOR_EGL_MODULE_NAME` with `xf86LoadSubModule()` and resolves the Glamor entry points with `LoaderSymbolFromModule()`. The resulting function pointers are stored in the per-screen `modesettingRec::glamor` sub-structure.
 - `try_enable_glamor()` calls the resolved `egl_init2` entry point and marks Glamor enabled only after that initialization succeeds. The existing `glamor_gbm` flag is set from `GLAMOR_EGL_CAP_TEXTURE_GBM_BO`; it is not proof of FP16 FBO renderability, FP16 external export, or end-to-end compositor synchronization.
@@ -1299,10 +1299,10 @@ The current modesetting DDX source at the inspected HEAD makes the integration p
 - `FreeScreen()` subsequently releases the per-screen modesetting record. No core callback may retain or dereference that record after provider unregistration.
 
 Consequences for the proposed interface:
-1. The modesetting provider owns the core registration and its callback context. Its callbacks may call the Glamor transform helpers through optional function pointers resolved from the loaded Glamor module.
-2. New Glamor helper symbols must be optional at module-load time. If an older Glamor module lacks them, or the feature-specific initialization/probe fails, modesetting simply does not register HDR capabilities; normal Glamor/SDR initialization must still succeed.
-3. Do not make a new Glamor symbol mandatory in `load_glamor()` for ordinary rendering. Resolve it separately as an optional capability.
+1. The modesetting provider owns the core registration and its callback context. Its callbacks call the required internal Glamor HDR helpers through the function pointers resolved from the paired Glamor module.
+2. Because modesetting and Glamor are built and deployed together, the HDR helper symbols are required parts of this internal same-build interface whenever the matching Glamor module is loaded. A missing symbol indicates a packaging/build mismatch and should be diagnosed as such; it is not a runtime capability probe and must not be silently treated as a supported older-module variant.
+3. This does not make HDR mandatory. The provider registers HDR capabilities only after Glamor initialization and all feature-specific runtime probes succeed. A valid paired build with unsupported FP16, shader precision, export, synchronization or hardware simply runs without HDR.
 4. The provider's early `CloseScreen()` teardown must stop new work, wait/release outstanding transform and compositor generations according to the negotiated protocol, unregister the core ops table, destroy its opaque buffers, and only then allow the existing modesetting/GBM/Glamor teardown to proceed.
-5. The Glamor module's own lifetime must remain pinned by the existing module dependency while the provider is registered. If the loader does not guarantee that lifetime, add an explicit module-lifetime reference or equivalent guard; never rely solely on stale resolved function pointers.
+5. The Glamor module's lifetime must cover every provider callback. The existing paired module-loading/lifetime rules must guarantee this; if they do not, the implementation must add an explicit lifetime guard rather than retain callable pointers past module teardown.
 
-This narrows the proposed first implementation: modesetting owns the optional core provider; Glamor supplies optional GPU helpers; failure to load or resolve the new helpers is a per-screen HDR-unavailable result, not a server/DDX initialization failure.
+This narrows the proposed first implementation: modesetting owns the optional core provider; Glamor supplies required internal helpers in the matched build. HDR remains a runtime-optional per-screen feature, not a mandatory DDX/server capability.
