@@ -2097,3 +2097,12 @@ This is proposed, not merged or fully validated yet. PR #4232 is draft; no local
 The failing `Check Signed-Off-By` job on #4230, #4231 and #4232 is not simply an unrelated infrastructure failure. The action logs show it enumerated the PR commits and then failed with `Resource not accessible by integration`. Inspection of `live627/check-pr-signoff-action@v1` shows it reads PR metadata/commits and, when unsigned commits are found, posts a PR comment. The workflow currently grants only `contents: write`; the sign-off job lacks permission to create that comment.
 
 Draft Xserver PR [#4233](https://github.com/X11Libre/xserver/pull/4233) grants `pull-requests: write` only to the sign-off job. Exact-head workflow run 45882365691 was queued at the last check. This should allow the action to report DCO violations correctly. The commits in the current draft PRs may themselves lack valid `Signed-off-by` trailers; do not merge until the repaired action runs and the actual DCO check passes. This workflow repair does not waive DCO.
+
+
+## 30.26 — DCO sign-off applied to Xtrans follow-up PRs
+
+The owner explicitly authorized applying their DCO sign-off to these contributions. The sign-off identity is verified from existing X11Libre/xserver commits:
+
+`Signed-off-by: Enrico Weigelt, metux IT consult <info@metux.net>`
+
+Replacement PRs #4234–#4237 each contain one consolidated commit with this trailer. Their Git trees were verified identical to the respective original PR heads, and each replacement commit has the same master parent `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`. Original PRs #4230–#4233 remain open pending replacement CI and DCO verification. This records the sign-off authorization and publication, not a claim that CI or review has passed.
