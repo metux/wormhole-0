@@ -495,3 +495,30 @@ Reference: Composite protocol/API documentation states that a new pixmap is crea
 - Wayland color-management concepts (reference only): https://wayland.freedesktop.org/docs/book/Color.html
 - Linux DRM/KMS documentation: https://docs.kernel.org/gpu/drm-kms.html
 - Historical X.Org DeepColor extension discussion: https://groups.google.com/g/xorg-devel/c/JmhOVTpZcs8
+
+
+### 16.3 EDID length and extension-count safety (2026-11-26 follow-up)
+
+A fresh review of the current EDID entry points found that the Stage 0 integration must first harden the size contract. The existing `xf86ParseEDID()` API is not yet sufficient to make truncated EDID safe:
+
+- `hw/xfree86/ddc/interpret_edid.c:243-268`: `parseEDID()` reads the base EDID fields and extension count before checking that `size >= EDID1_LEN`. It stores the extension count from `(char *)` rather than an unsigned byte, so values above 127 can become negative on platforms with signed `char`.
+- `interpret_edid.c:285-291`: `xf86ParseEDID()` rejects NULL/zero inputs but accepts every nonzero size, including buffers shorter than the 128-byte base block.
+- `interpret_edid.c:273-274`: the complete-raw-data flag is set for any `size > 128`; it does not verify that the buffer contains all extension blocks claimed by byte 126.
+- `interpret_edid.c:465-488`: `cea_for_each_db()` trusts `mon->no_sections` when stepping through `rawData`. The flag proves only that the caller asserted completeness; it does not carry or check the actual allocation length.
+- `hw/xfree86/drivers/video/modesetting/drmmode_display.c:3206-3212`: the modesetting path currently calls the legacy `xf86InterpretEDID()` (which receives no size) and sets `MONITOR_EDID_COMPLETE_RAWDATA` whenever the DRM EDID blob is merely longer than 128 bytes. It does not compare the blob length with the extension count in the base block. There is still no production call to `xf86DoInterpretHDRMetadata()`.
+- `interpret_edid.c:883-889`: `xf86DoInterpretHDRMetadata(NULL)` is not safe. `cea_for_each_db()` returns early for NULL, but the caller then dereferences `monPtr->hdr` in its return expression.
+- `hw/xfree86/ddc/ddc.c:443-457`: the optional `xf86DoEEDID(..., complete=true)` path allocates extension storage from the declared count, does not check `reallocarray()` before using its result, ignores individual extension-read failures, and marks the result complete unconditionally. The normal `xf86DoEDID_DDC2()` wrapper currently passes `complete=false`, so it reads only the base block.
+
+**Stage 0 consequence:** do not simply add `xf86DoInterpretHDRMetadata(mon)` after the current modesetting parse. That would make malformed/truncated blobs a potential out-of-bounds read. First define and test a length-aware parse invariant:
+
+1. Reject a NULL input or any size smaller than `EDID1_LEN` before reading base fields.
+2. Read byte 126 as `uint8_t`; compute the number of physically available complete extension blocks from the supplied size without overflow.
+3. Never expose an extension count larger than the number of complete blocks actually present. Decide explicitly whether an incomplete EDID is rejected or retained as a base/partial monitor record with extension parsing disabled; do not mark it complete.
+4. Ensure every extension walker is bounded by the validated available length/count, not merely by a completeness flag. Audit non-HDR walkers too because they also consume `no_sections` and `rawData`.
+5. Make `xf86DoInterpretHDRMetadata()` return false for NULL/incomplete inputs without dereferencing them.
+6. In modesetting, pass the DRM blob's actual `length` through the size-aware parser and expose HDR sink capabilities only when all claimed extension blocks are present and validated. Preserve the existing legacy EDID behavior when the feature is not used.
+7. For DDC reads, check allocation and every extension-read result before setting the complete flag; partial reads must not masquerade as complete EDID.
+
+Required regression cases now include sizes 0, 1, 127, 128, 129, 255, 256, and 383 bytes; extension count 0, 1, 2 and 255; claimed count greater than available complete blocks; exact full-length buffers; extra trailing bytes; NULL monitor; malformed CTA data-block offsets/lengths; and a valid no-HDR CTA EDID. Tests must prove no extension walker reads outside the supplied buffer (ASan where available).
+
+This is a source-review finding and a Stage 0 design constraint only. No Xserver implementation, branch, build or test was changed or run.
