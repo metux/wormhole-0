@@ -202,8 +202,8 @@ The owner approved the following design direction in the dedicated HDR session; 
 - Common compositor working space: linear BT.2020 / D65, output-independent, neutral RGB 1.0 = 203 cd/m².
 - Negotiated compositor handoff: RGBA IEEE-754 binary16 (FP16), linear premultiplied alpha. This remains capability-negotiated; the fallback and complete wire contract must still be designed.
 - Unmanaged legacy windows: implicit sRGB primaries, D65 and IEC 61966-2-1 transfer function.
-- Legacy SDR reference white: session/server-wide configurable setting, default 80 cd/m² (conventional sRGB reference viewing). The setting is not per-output; explicit Color Descriptions override it.
-- A session value of 203 cd/m² is a valid user/session choice for HDR-desktop graphics white. At the default 80 cd/m², legacy sRGB white maps to working RGB approximately 0.3941; at 203 cd/m² it maps to 1.0.
+- Legacy SDR reference white: session/server-wide configurable setting, default 203 cd/m² to anchor SDR graphics white to HDR reference white in the mixed HDR composition path. The setting is not per-output; explicit Color Descriptions override it.
+- Lower values such as 80 cd/m² (conventional sRGB reference viewing) or 100 cd/m² remain user/session-configurable alternatives. At the 203 cd/m² default, legacy sRGB white maps to working RGB 1.0; at 80 cd/m² it maps to approximately 0.3941.
 
 Configuration interface and allowed range remain open. If runtime changes are supported, every affected legacy window must be fully retransformed into a new synchronized buffer generation before publication. No Xserver implementation was authorized or changed.
 
