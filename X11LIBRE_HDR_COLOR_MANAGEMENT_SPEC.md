@@ -2014,3 +2014,36 @@ An alternative is a request-offset-aware FD marker in libxcb's output queue. Eit
 6. Only then freeze the HDR Composite XML schema and generated bindings against the proven transport contract.
 
 No source code, protocol XML, generated binding or tests were changed. No implementation was authorized.
+
+
+## 30.22 — Correction: recvmsg() byte count does not locate SCM_RIGHTS marker
+
+The Linux AF_UNIX/SOCK_STREAM regression test added in X11Libre/xserver PR #4230
+invalidates the marker-offset formula proposed in section 30.20.
+
+The reproducer performs an ordinary `write("prior", 5)`, followed by
+`sendmsg("Mtail", 5, SCM_RIGHTS)`. A single `recvmsg()` with a sufficiently
+large iovec returns all ten bytes (`"priorMtail"`) together with the ancillary
+FD record. Therefore `read_offset + recvmsg_returned_bytes - 1` identifies the
+last byte returned (`l`), not the first byte of the FD-bearing request
+(`M`). The ancillary record does not provide an offset within the returned
+byte range.
+
+**Supersedes the receive-side marker-offset derivation in section 30.20.**
+Do not implement or rely on that formula. The test is now the executable
+evidence for this correction; the earlier prose describing the SCM_RIGHTS
+barrier was insufficient to derive a byte offset from a coalesced read.
+
+The required contract remains unresolved: Xtrans must associate every
+received FD group with the exact request boundary, but this cannot be inferred
+from the current `recvmsg()` byte count alone. Investigate and test a framing
+strategy that can unambiguously recover the marker position (including
+read-ahead, partial requests, BIG-REQUESTS and pipelining), or use a transport
+design that carries the association explicitly. Do not freeze the extension
+wire ABI or advertise HDR FD handoff until this is proven.
+
+PR #4230 currently contains the Linux socketpair regression test. PR #4231
+currently rejects `MSG_CTRUNC`; it does not solve request-scoped marker
+association or the separate `appendFd()` allocation-failure path.
+
+No Xserver implementation or protocol XML is authorized by this correction.
