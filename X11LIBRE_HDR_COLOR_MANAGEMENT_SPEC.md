@@ -522,3 +522,24 @@ A fresh review of the current EDID entry points found that the Stage 0 integrati
 Required regression cases now include sizes 0, 1, 127, 128, 129, 255, 256, and 383 bytes; extension count 0, 1, 2 and 255; claimed count greater than available complete blocks; exact full-length buffers; extra trailing bytes; NULL monitor; malformed CTA data-block offsets/lengths; and a valid no-HDR CTA EDID. Tests must prove no extension walker reads outside the supplied buffer (ASan where available).
 
 This is a source-review finding and a Stage 0 design constraint only. No Xserver implementation, branch, build or test was changed or run.
+
+
+### 16.4 EDID parser call-site inventory and bounded-walker implications (2026-11-26)
+
+A repository-wide code search confirms that `xf86ParseEDID()` currently has no production call site: only its declaration, implementation and the generated API feature marker are found. Existing consumers still use the legacy `xf86InterpretEDID()` / `xf86InterpretEEDID()` entry points:
+
+- `hw/xfree86/drivers/video/modesetting/drmmode_display.c:3206-3212` parses the DRM connector EDID blob without passing its length.
+- `hw/xfree86/ddc/ddc.c` uses the legacy entry points for DDC1/DDC2 reads; `xf86DoEDID_DDC2()` delegates to `xf86DoEEDID(..., FALSE)`, so that wrapper does not fetch extension blocks.
+- `hw/xfree86/int10/vbe.c` parses the VBE-provided EDID through `xf86InterpretEDID()`.
+- Tests call the legacy parser directly with captured EDID arrays.
+
+The length issue is not isolated to the new HDR walker. Existing extension consumers in `interpret_edid.c` include `xf86ForEachDetailedBlock()`, `xf86ForEachVideoBlock()`, and `xf86MonitorFindHDMIBlock()`. The first two iterate `mon->no_sections` and compute extension addresses from `mon->rawData`; the CEA data-block helper used by the HDMI lookup also relies on the shared extension walker. Only `cea_for_each_db()` checks `MONITOR_EDID_COMPLETE_RAWDATA`, and that flag currently has no associated byte-length field.
+
+**Design implication:** a fix that only adds a guard inside `xf86DoInterpretHDRMetadata()` is insufficient. The parser needs a single source of truth for the actual raw-data length / number of complete available extension blocks, and every extension walker must be bounded by it. Possible implementation choices (not selected yet):
+
+- add tail-appended raw-data length / available-extension metadata to `xf86Monitor` and make all walkers use it; or
+- normalize `no_sections` to the number of complete, validated extension blocks and preserve the advertised count separately only if a real consumer needs it.
+
+The first choice is more explicit but changes the public structure again; the second may alter the historical meaning of `no_sections`. Audit all consumers before choosing. The legacy one-block entry point must not claim or expose unavailable extensions, while size-aware callers should retain complete valid extensions only after validating their actual byte extent. No production call site should infer completeness from `size > 128` alone.
+
+No Xserver source was modified and no build/test was run. This remains a prerequisite design/code-review finding for Stage 0.
