@@ -1875,3 +1875,70 @@ A closer trace of `os/io.c`, `ReadFdFromClient()`, `dix/dixstruct_priv.h` and `o
 This strengthens the 30.18 blocker: reliable FD handoff requires both (a) send-side queue allocation/ownership errors to propagate and (b) receive-side ancillary FDs to be associated with exact request boundaries and counted. Merely adding extension-level checks around the current `req_fds` counter is insufficient.
 
 No source code or tests were changed.
+
+
+
+## 30.20 — FD marker byte offsets and output ordering
+
+This follow-up closes an important gap in 30.19. It distinguishes (a) the stream position at which SCM_RIGHTS is attached, (b) the X request/reply boundary, and (c) the lifetime of the FD queue. The section is a source-backed design finding, not an implementation.
+
+### Receive side: Linux AF_UNIX provides a usable marker boundary
+
+Linux `unix(7)` documents SCM_RIGHTS as a barrier in a SOCK_STREAM byte stream. In its example, four ordinary bytes followed by one byte sent with ancillary data are returned by one `recvmsg()` as five bytes plus the ancillary data; the subsequent read receives the remaining bytes. Thus, for Linux AF_UNIX stream sockets, the byte carrying the ancillary data is the final byte returned by that `recvmsg()`.
+
+This gives a workable v1 framing rule:
+
+1. The client must attach the entire FD group to the **first byte of the FD-bearing X request**.
+2. Xtrans records a monotonically increasing per-connection stream-byte offset for every received SCM_RIGHTS group. Under the verified Linux barrier semantics, the marker offset is `read_offset_before_call + recvmsg_returned_bytes - 1`.
+3. The Xserver input layer already knows request start/end offsets while parsing its buffered stream. It validates that the FD marker offset equals the first byte of exactly one request and that the group's FD count matches that request's declared count.
+4. FDs attached anywhere else (inside a request, at a non-FD request, duplicate groups for one request, or an unexpected extra group) are a protocol/transport error; close descriptors and fail the connection rather than allowing a later request to consume them.
+
+This avoids trying to infer the actual FD count from `ClientRec.req_fds`. The latter remains only a consumer-side remaining count.
+
+### Why Xtrans must expose offsets, not just a connection queue
+
+At current Xserver master `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`:
+- `os/io.c:ReadRequestFromClient()` calls `_XSERVTransRead()` with the remaining input-buffer capacity, not just the current request's remaining length. One read may therefore bring in multiple pipelined requests.
+- The parser retains surplus bytes in `ConnectionInput` and dispatches one request at a time.
+- `os/Xtranssock.c` currently appends received descriptors to a connection-wide `recv_fds` list, with no stream offset or request association.
+
+A new transport read result must preserve the marker byte offset (or return ordered FD batches with offsets) alongside the bytes. The Xserver input parser must compare those offsets with absolute request boundaries, including after buffer compaction, partial headers, BIG-REQUESTS headers, and pipelined requests. A plain FIFO FD queue cannot provide this invariant.
+
+The Linux barrier behavior is documented by `unix(7)` (man-pages 6.17, 2026-02-08). Do not assume identical semantics on every AF_UNIX implementation: until equivalent behavior is verified by platform-specific tests, advertise the HDR FD handoff only on tested transport/platform combinations. In v1, a Linux AF_UNIX-only gate is safer than a generic `TRANS_LOCAL` gate.
+
+### Receive-side truncation and allocation failures
+
+The current `recvmsg()` path ignores `msg.msg_flags`. A strict implementation must:
+- reject `MSG_CTRUNC` (the kernel may have truncated the ancillary data / FD list);
+- validate each SCM_RIGHTS cmsg length before deriving the FD count;
+- close every received FD if the cmsg is malformed, the queue allocation fails, or the request-boundary association fails;
+- fail the connection/request rather than silently accepting a shortened list;
+- size the control buffer using the platform's required `CMSG_SPACE()` convention and test the maximum supported FD group plus an over-limit group.
+
+The current `appendFd()` failure path closes the individual FD but does not propagate failure or mark the connection broken. That must be fixed as part of the transport contract.
+
+### Send side: both Xtrans and libxcb need byte-boundary ordering
+
+**Xserver output:** `WriteFdToClient()` queues descriptors in Xtrans. The next `_XSERVTransSocketWrite()` sends all queued descriptors with the first byte of the next transport write. `FlushClient()` writes the entire current output buffer, which may already contain earlier replies/events. Therefore the next transport write's first byte is not necessarily the reply that logically owns the queued FD. If output is buffered, or multiple FD-bearing replies are queued before a flush, descriptors can be attached to the wrong reply.
+
+The server-side API must bind each FD group to an explicit output-stream byte offset/reply segment. `FlushClient()` must write preceding bytes without those FDs, then use `sendmsg()` exactly when the designated first reply byte reaches the head of the stream. Partial writes and EAGAIN must preserve the pending boundary and ownership. An alternative is an atomic `dixWriteToClientWithFds()`-style operation that appends the reply bytes and FD group as one ordered output segment; it must still handle a preceding blocked output segment without blocking the server.
+
+**libxcb client output:** current `mirror.fdo.libxcb:master` (`aa7f3256060451ad65a38feeccf792f44181a4e0`) was traced through `src/xcb_out.c` and `src/xcb_conn.c`:
+- `send_fds()` appends descriptors to `c->out.out_fd` after `prepare_socket_request()`; that helper waits for an active writer but does not flush `c->out.queue`.
+- `send_request()` can append the FD-bearing request to an already non-empty `c->out.queue` and return without sending it.
+- When a later flush reaches `_xcb_conn_wait()`, `sendmsg()` uses the vector beginning with the existing `c->out.queue` bytes and attaches `out_fd` to the first byte of that vector.
+
+This is a source-level request/FD boundary hazard when earlier requests remain buffered. Do not assume that generated `xcb_send_request_with_fds()` alone guarantees the ancillary data is attached to the start of its own request. Before adopting this API for HDR, either fix libxcb to flush/order preceding bytes atomically before staging the FD group, or add an explicit request-offset-aware output mechanism. Confirm with a minimal regression reproducer; do not rely on an undocumented caller-side `xcb_flush()` requirement.
+
+### Required regression matrix
+
+- Client: ordinary request buffered, then one FD-bearing request; verify FDs attach to the latter's first byte.
+- Client: two consecutive FD-bearing requests with different FD counts, with and without intervening ordinary requests.
+- Client: output queue full, partial send, EAGAIN, concurrent request threads and connection shutdown.
+- Server receive: several ordinary requests followed by an FD request in one stream; FD marker at request start is correlated correctly after read-ahead.
+- Server receive: partial request header/body, BIG-REQUESTS, multiple FD groups in pipelined requests, marker in the middle of a request, missing/extra group, duplicate group, count mismatch and `MSG_CTRUNC`.
+- Server output: earlier reply/event already buffered, then FD-bearing reply; two FD-bearing replies before flush; partial write/EAGAIN; output buffer compaction; client disconnect.
+- Fault injection: every FD queue allocation fails; all received/sent descriptor ownership paths close exactly once and the connection cannot continue with an ambiguous stream.
+- Platform matrix: Linux AF_UNIX first; test other AF_UNIX implementations before enabling them. TCP/INET remain unsupported.
+
+No source code, protocol XML, generated binding or tests were changed. No implementation was authorized.
