@@ -1306,3 +1306,68 @@ Consequences for the proposed interface:
 5. The Glamor module's lifetime must cover every provider callback. The existing paired module-loading/lifetime rules must guarantee this; if they do not, the implementation must add an explicit lifetime guard rather than retain callable pointers past module teardown.
 
 This narrows the proposed first implementation: modesetting owns the optional core provider; Glamor supplies required internal helpers in the matched build. HDR remains a runtime-optional per-screen feature, not a mandatory DDX/server capability.
+
+
+### 30.10 Proposed ownership of physical color buffers and export
+
+This subsection records a concrete implementation proposal based on the current Xserver master source at `3132e4b7997b525d046e727c1db6656d14b5bc20`. It is not yet an owner-approved API or implementation authorization.
+
+#### Verified current ownership facts
+
+- The modesetting DDX loads `glamoregl` as a separate module and resolves its entry points through `LoaderSymbolFromModule()`. The `glamor` implementation is built as a static library and linked into `libglamoregl.so`; it is not linked directly into `modesetting_drv.so`. The two modules remain a runtime module boundary even though they are built/deployed together.
+- Glamor's EGL screen-private state owns the EGL display/context, DRM fd, and (when enabled) GBM device. It also tracks DMA-BUF export and native-fence capabilities.
+- After Glamor initialization, modesetting obtains the same GBM device through `glamor_egl_get_gbm_device()` and uses it for modesetting BO allocation. It therefore does not need a second GBM device for the HDR source buffers.
+- Existing Glamor DMA-BUF export functions operate on ordinary `PixmapPtr` objects. The legacy single-FD/stride helpers are not a sufficient descriptor for a general multi-plane color-buffer handoff.
+- Glamor already has `glamor_egl_flush_fence_fd()`, which creates an EGL native-fence sync, flushes GL, and duplicates the resulting fence FD. It is an existing producer-fence building block, not proof of a complete compositor acquire/release protocol.
+- `glamor_egl_syncobj_supported()` probes DRM timeline-syncobj support used by the existing DRI3 path. That probe alone does not establish that the proposed compositor protocol can import, wait on, signal, and release the exact synchronization objects it needs.
+
+#### Recommended responsibility split
+
+1. **DIX/core owns logical state only.** It tracks per-window source descriptions, source/transformed generations, publication state and logical references. It does not own GBM BOs, EGLImages, GL textures, DRM handles or EGL sync objects.
+2. **The modesetting provider owns per-screen orchestration.** It registers the optional core provider after Glamor has initialized; verifies that the complete color-buffer/export/synchronization path is usable; delegates physical allocation, GPU transforms, DMA-BUF export and EGL fence operations to Glamor's required same-build internal helpers; and connects those operations to the negotiated Composite handoff. It should not implement a second GBM allocator or duplicate Glamor's EGL resource bookkeeping.
+3. **Glamor owns physical color-buffer resources.** A private opaque `GlamorColorBuffer` owns its GBM BO (or equivalent exportable storage), EGLImage, GL texture/FBO and export/synchronization resources. It is separate from `PixmapPtr`, the X pixmap format table and normal window backing storage. Creation, transformation, export, fence import/wait, and destruction all run in the Glamor EGL module using its existing context and GBM device.
+4. **The color-managed Composite extension owns protocol transport.** It sends duplicated DMA-BUF plane FDs and producer synchronization to the compositor, receives explicit release information/fences, and correlates them with immutable buffer generations. The protocol is a color-semantics contract, not a redefinition of DRI3. Existing DRI3 FD-passing machinery may be reused as a transport implementation detail, but DRI3 must not become the source of color semantics or a mandatory generic-core dependency.
+
+This split minimizes duplicated resource ownership: Glamor is the only layer that knows how its GL/EGL objects map to exportable storage; modesetting is the only layer that knows which screen/backend instance is active; core only knows abstract buffers and their state transitions.
+
+#### Allocation and export contract
+
+- Allocate the FP16 target as an opaque Glamor color buffer, not by manufacturing a fake X pixmap depth or by changing the screen pixmap format.
+- Prefer an exportable GBM BO on Glamor's existing GBM device, with a format/modifier pair that has been proven renderable by the active GL/EGL stack and importable by the compositor. The exact DRM FourCC, channel order, modifier set and plane count remain to be verified; do not assume that a GL `RGBA16F` internal format automatically has a matching exportable DRM format.
+- The transformed compositor buffer does not inherently need KMS primary-plane scanout capability. Do not require `GBM_BO_USE_SCANOUT` merely because existing screen/front-buffer allocation prefers it. Require rendering and external sharing/export; add scanout usage only if a separately designed direct-scanout optimization needs it.
+- The exported descriptor must carry FourCC, modifier, width/height, plane count, and per-plane FD, stride and offset. Even if the first supported format is single-plane, the interface must not encode that assumption as a universal ABI rule.
+- Every exported FD has explicit ownership and close rules. Each handoff must provide a descriptor whose FD lifetime is independent of Glamor's internal BO handle and of any other compositor handoff. The compositor must not receive a raw GBM/EGL object or an X `PixmapPtr`.
+- Runtime probing must allocate a real target, attach it to the GL render path, verify framebuffer completeness and shader writes, export its planes, and verify that the exact exported descriptor can be imported by the intended consumer path. Extension strings or a successful legacy DRI3 pixmap export are insufficient.
+
+#### Synchronization contract
+
+Use explicit synchronization for the first color-managed handoff. The initial candidate is native-fence FD synchronization where the full producer and consumer paths support it:
+
+1. Glamor completes the transform commands and exports a producer fence FD. The existing `glamor_egl_flush_fence_fd()` is a useful starting point, but its error handling, ownership, and ordering must be integrated into the color-buffer generation API.
+2. The compositor waits on the producer fence before sampling the buffer.
+3. When the compositor has finished all GPU reads, it returns a release fence FD associated with that exact buffer generation.
+4. Glamor imports and waits on the release fence before reusing or overwriting that physical storage. If the EGL implementation cannot import and wait on the consumer fence correctly, that buffer is not reusable until a separately defined safe completion path has completed; a mere CPU-side reference drop is not sufficient.
+5. The core retires the logical generation only after compositor release has been received and the backend confirms that reuse/destruction is safe.
+
+The runtime capability test must cover both directions (producer export and consumer-release import/wait), not just the existing native-fence export helper. Check the exact EGL extensions and functions required for the chosen server-side or client-side wait path. DRM syncobj timeline support is a possible alternative/future transport, but the current DRI3 syncobj capability flag must not be reused as proof of this new contract. Do not advertise implicit synchronization unless its guarantees have been independently specified and tested end-to-end.
+
+#### Consequence for the provider API
+
+The illustrative operations table in section 30.3 is not yet complete for this lifecycle. Before freezing it:
+- distinguish compositor release/reuse from final backend-buffer destruction;
+- make the release callback accept the consumer's release synchronization object (or an equivalent opaque completion token);
+- keep export-handle duplication/closure explicit;
+- ensure the core can retain a generation while the compositor owns it without retaining EGL/GBM internals;
+- define what happens when the compositor disconnects or never returns a release fence (safe retirement/leak bound, timeout policy, and negotiated-mode teardown).
+
+A possible conceptual split is `release_buffer(..., consumer_release_sync)` to return a generation to the backend's reusable pool and `destroy_buffer(...)` to free the physical allocation after all ownership has ended. Exact names, signatures and error semantics remain open.
+
+#### Remaining validation gates
+
+- Verify the exact RGBA FP16 DRM format and modifier combinations on Mesa/i915, Xe, AMDGPU and other intended modesetting stacks; do not infer support from vendor identity.
+- Verify export/import and both fence directions with at least one real compositor implementation before advertising the protocol.
+- Verify behavior with multiple screens/GPUs and hot-unplug, because Glamor resources and GBM devices are per screen and may have different lifetimes.
+- Verify that provider teardown quiesces generations before modesetting releases the borrowed GBM device and before Glamor destroys EGL/GBM state.
+- Keep the existing NVIDIA requirement unchanged: no HDR provider is required, and no new mandatory DDX callback or `ScreenRec` field is introduced.
+
+No Xserver source code has been changed. This remains a design proposal; implementation is not authorized by this subsection.
