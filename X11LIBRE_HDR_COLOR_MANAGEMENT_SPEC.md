@@ -1115,3 +1115,175 @@ At minimum, before merging the first implementation:
 7. Test both no-compositor and compositor paths with the HDR feature absent, unsupported, and negotiated. The unsupported case must be visually and behaviorally equivalent to the legacy SDR path.
 
 This is a design/ABI constraint, not implementation authorization.
+
+
+## 30. Internal Xserver-Core / DDX / Glamor boundary
+
+### 30.1 Status and design objective
+
+This section records the proposed internal architecture after inspection of Xserver master at `3132e4b7997b525d046e727c1db6656d14b5bc20` (2026-11-26). It is a design proposal, not a frozen internal API, wire ABI, or implementation authorization.
+
+It applies the already-approved constraints:
+- no new `ScreenRec` fields and no new `DevPrivateType`;
+- a core-owned optional per-screen operation record attached through the existing `PRIVATE_SCREEN` / `devPrivates` mechanism;
+- proprietary NVIDIA DDX remains functional on legacy SDR without implementing HDR;
+- no mandatory DRM/KMS, GBM, Vulkan or higher OpenGL dependency in generic DIX/core;
+- source transforms produce the output-independent linear BT.2020/D65/203 cd/m² FP16 compositor working space already agreed in sections 24–26.
+
+The main separation is:
+
+1. **Xserver core/DIX:** owns policy, per-window source generations, Damage/Present integration, negotiation and lifetime. It calls an optional abstract per-screen provider. It does not issue GL, EGL, GBM or DRM calls.
+2. **DDX/backend provider:** registers the optional implementation for one screen. The first in-tree provider may be modesetting only. It reports the capabilities of the complete active path and coordinates allocation/export/synchronization with the rendering backend. An unsupported DDX registers nothing.
+3. **Glamor:** performs GPU-side source decoding and color transformation using its existing GL context and shader infrastructure. It knows about GL textures/FBOs and its own GPU resources, but not about DRM connector policy, KMS HDR metadata, or compositor protocol semantics.
+4. **Color-managed Composite extension layer:** negotiates the handoff and exposes the backend-produced buffer plus immutable working-space and synchronization information. It must not be conflated with legacy CompositeNameWindowPixmap.
+
+The no-compositor final-output path remains a separate output-side concern (section 27). The source-transform provider described here does not replace per-output conversion.
+
+### 30.2 Why Glamor needs a separate color-buffer object
+
+The current Glamor implementation has a per-screen `glamor_screen_private` attached through its own `PRIVATE_SCREEN` key, and per-pixmap `glamor_pixmap_private` records. Its normal FBO creation path derives the GL internal format from the X pixmap depth through `glamor_format_for_pixmap()`. Its pixmap private also tracks tiled FBO arrays for large pixmaps and EGLImage state used by existing import/export paths.
+
+That model is correct for ordinary X pixmaps, but it is not an appropriate representation for the negotiated RGBA FP16 working buffer:
+- RGBA FP16 is not an ordinary core X pixmap depth/bpp contract;
+- adding a fake depth or silently changing the format of a Composite named pixmap would violate legacy assumptions;
+- the existing DRI3 export callbacks operate on `PixmapPtr` and do not by themselves define the color-managed buffer contract.
+
+**Proposal:** add a Glamor-private opaque color-buffer object, conceptually `GlamorColorBuffer`, owned by the Glamor screen-private state. It contains the GPU storage and any EGL/GBM export representation needed by the selected backend. It is not a `PixmapPtr`, does not alter the X pixmap format table, and is not exposed as an ordinary X drawable.
+
+The first implementation should use a dedicated renderable FP16 target (for example a GL RGBA16F texture/FBO) and an explicit shader path. It must not change the format of the normal screen pixmap or existing X pixmaps. Large dimensions must be handled explicitly: either implement tiled/segmented color buffers and region transforms, or reject dimensions the backend cannot support before advertising the handoff. Do not silently fall back to a lower-precision target.
+
+### 30.3 Optional core-owned per-screen provider
+
+The core should expose a private/internal registration helper backed by the core-owned `PRIVATE_SCREEN` record described in section 29. The key is registered by core code at deterministic initialization time. The provider submits a versioned table and opaque context; core copies and validates the table into core-owned storage.
+
+Conceptual interface shape (names and exact types are illustrative, not ABI):
+
+```c
+struct XserverColorBackendOpsV1 {
+    uint32_t abi_version;
+    uint32_t struct_size;
+    uint64_t capabilities;
+
+    enum XserverColorResult (*query_caps)(ScreenPtr,
+                                          struct XserverColorCaps *);
+
+    enum XserverColorResult (*alloc_buffer)(ScreenPtr,
+                                            const struct XserverColorBufferSpec *,
+                                            void **backend_buffer);
+
+    enum XserverColorResult (*transform_region)(ScreenPtr,
+                                                PixmapPtr source,
+                                                const struct XserverColorDescription *,
+                                                RegionPtr source_region,
+                                                void *backend_buffer,
+                                                const struct XserverColorSync *acquire,
+                                                struct XserverColorSync *complete);
+
+    enum XserverColorResult (*export_buffer)(ScreenPtr,
+                                             void *backend_buffer,
+                                             struct XserverColorBufferExport *);
+
+    void (*release_buffer)(ScreenPtr, void *backend_buffer);
+};
+```
+
+The actual interface must use Xserver-private headers initially, not a public third-party driver SDK. It must contain no GL/EGL/GBM/DRM types and must not expose Glamor private structures to DIX. The backend buffer and synchronization objects are opaque to core. Any exported handles have explicit ownership, duplication and close rules; no file descriptor or backend handle may be retained after its documented lifetime.
+
+The table is optional. No registration means no color-managed source handoff. Registration validation checks:
+- supported ABI version and a `struct_size` large enough for every required member;
+- all mandatory callbacks are non-NULL;
+- every advertised capability has the callbacks and backend behavior needed to implement it;
+- unknown future capability bits are ignored safely;
+- registration is rejected atomically on mismatch or allocation failure.
+
+Do not cache addresses into the DIX private allocation across further private-key registrations. Registration and unregistration must be idempotent and tied to the screen lifecycle. Unregister/disable callbacks before Glamor context, GBM device, DDX context, or module code is torn down. Core must never call a stale callback after backend teardown. A provider must not leave its key, table storage, or callback lifetime dependent on unloadable module static storage.
+
+### 30.4 Responsibility split between modesetting and Glamor
+
+**Initial modesetting provider**
+- registers only after its rendering context and Glamor initialization have succeeded;
+- determines whether the complete source-transform and compositor-export path is available on this screen;
+- coordinates backend buffer sharing/export and the synchronization mechanism supported by the actual EGL/GBM/DRM stack;
+- does not make HDR mandatory for screen initialization or ordinary scanout;
+- unregisters before its rendering/backend resources are destroyed.
+
+**Glamor transform engine**
+- exposes private in-tree helpers for creating, transforming, exporting where appropriate, and destroying the opaque color-buffer object;
+- uses its existing per-screen context and shader compilation infrastructure;
+- samples the current source pixmap without changing its storage format or redirecting normal X drawing into the transformed target;
+- decodes the negotiated source Color Description and writes linear, premultiplied RGBA FP16 in the agreed common working space;
+- supports partial updates only when source/destination synchronization and buffer-generation rules make them correct;
+- has no knowledge of connector-specific output transforms or KMS metadata.
+
+The provider table is the boundary between core and the active screen backend. The Glamor helpers are a separate private boundary between that provider and the GPU rendering implementation. Generic core must not directly call exported Glamor entry points: Glamor is currently built as a static library used by DDX/rendering paths, and its context/lifetime are established by the DDX. The provider may delegate to Glamor without making Glamor a mandatory core dependency.
+
+For the first implementation, keep these interfaces private to the in-tree modesetting path. Do not add a mandatory callback to the public DDX SDK. The proprietary NVIDIA DDX does not register the provider and continues through its existing SDR path.
+
+### 30.5 Runtime capability probing; preserve the GL baseline
+
+Current Glamor initialization accepts desktop OpenGL 2.1 or later and GLES 2.0 or later. HDR must not raise that baseline globally. The existence of a GL context, DRI3 support, GBM support, a 10-bit visual, or a particular GPU vendor is not sufficient evidence for FP16 color transformation.
+
+The optional provider must probe the actual active path, including:
+- renderable FP16 texture/FBO support for the selected target format, verified by allocating and checking a real framebuffer rather than trusting an extension string alone;
+- shader compilation and adequate fragment precision for the v1 transforms (including PQ decode where enabled);
+- source texture formats and import paths actually encountered;
+- buffer export/shareability in the chosen compositor transport, including exact channel order, component type, plane layout, modifier and dimensions;
+- a working synchronization path between source rendering, transform completion, compositor reads and buffer reuse;
+- maximum texture/render-target dimensions and any tiling limits.
+
+On GLES implementations where fragment `highp` or required half-float renderability is unavailable, the capability is absent. Do not silently substitute mediump math or normalized 8/10-bit storage. HLG remains unadvertised until its system-gamma and nominal-peak semantics are specified (section 26).
+
+Capability reporting is end-to-end and per screen. For example, FP16 renderability without compositor export and synchronization is not sufficient to advertise a usable color-managed Composite handoff. A separate output-pipeline capability must be queried independently; source transform support does not prove that the output can signal or scan out HDR.
+
+### 30.6 Buffer, generation and synchronization lifecycle
+
+The core owns the logical source and transformed-buffer generations; the backend owns the physical GPU allocation and export resources.
+
+For each redirected window:
+1. Track the current source pixmap/backing generation, Color Description generation, and Damage region.
+2. Wait until the source generation is safe to read. A Present flip/copy or DRI3 client render must not be assumed complete merely because the X request or Damage notification arrived.
+3. Transform the changed region into a destination generation that is not currently being read by the compositor. If the destination is still held by a compositor reference, allocate/use another generation rather than modifying it in place.
+4. Publish the new transformed generation only after its completion synchronization point is valid.
+5. Keep older generations alive until every compositor reference/release synchronization has completed.
+6. Reuse or destroy storage only after both GPU and compositor ownership have ended.
+
+A Damage observer attached to the Window may follow backing-pixmap replacement through the existing Damage window-registration mechanism, but this alone does not retarget a compositor's already named legacy pixmap. The versioned handoff must therefore expose explicit transformed-buffer generations and lifetime/release semantics. Present backing changes, resize, depth/format changes, unredirect, window destruction, compositor restart and Color Description replacement must all create or retire generations deterministically.
+
+The initial implementation should prefer immutable published generations and full-frame transformation until region-update correctness is demonstrated. Partial Damage transforms are an optimization, not a requirement for correctness. Do not publish a buffer with stale pixels, mixed Color Description generations, or incomplete writes.
+
+The synchronization abstraction must be transport-neutral at the core boundary. It may be implemented by a native fence, syncobj point, or another validated mechanism in the backend. The current Glamor XSync integration flushes GL before triggering an X Sync fence; that is not by itself proof of a compositor-visible DMA-BUF fence or end-to-end GPU synchronization. Do not advertise explicit external synchronization until the complete producer/consumer path has been tested. If a supported implicit-sync path is used, its guarantees and limitations must be specified and tested separately.
+
+### 30.7 Negotiation and failure behavior
+
+The compositor-facing protocol must negotiate this contract explicitly and versionedly. It must receive, as one coherent handoff:
+- the transformed buffer handle/transport descriptor;
+- exact storage format, channel order, component type, dimensions, planes/strides/modifiers where applicable;
+- the immutable common working-space identity (linear BT.2020/D65, 203 cd/m² scale);
+- linear premultiplied-alpha semantics;
+- source/buffer generation identity;
+- acquire/release synchronization semantics.
+
+The protocol name, opcode allocation, exact wire structures, transport handle type and multi-client policy remain open. Do not repurpose core opcodes or silently alter legacy CompositeNameWindowPixmap. A compositor that does not negotiate continues to receive the legacy pixmap with its existing semantics.
+
+Negotiation must fail before entering color-managed mode if the backend cannot guarantee that every visible source reaching the compositor is transformed according to the negotiated contract. Once the new contract is active, an individual transform/allocation/synchronization failure must not leak the untransformed source buffer as though it were in the working space. The server must report a protocol/backend error and follow a defined transition back to the legacy path (or terminate that negotiated mode) only after safely quiescing outstanding generations. No partial transform and no silent format substitution.
+
+### 30.8 Scope exclusions and open design gates
+
+This provider is only the **source-to-common-working-space** path. It does not implement:
+- output-specific tone mapping, gamut mapping, transfer encoding or DRM/KMS metadata;
+- the no-compositor per-CRTC final-output path;
+- arbitrary ICC profile ingestion or CMM integration (deferred beyond v1);
+- HLG until its luminance semantics are specified;
+- a public third-party DDX ABI;
+- a new mandatory DRI3 or Vulkan dependency.
+
+Before implementation, the following must be separately reviewed and decided:
+1. exact core provider registration API and callback/error semantics;
+2. whether the first provider can safely own both Glamor transformation and export, or whether buffer transport requires a separate DDX sub-interface;
+3. exact FP16 external buffer formats/modifiers supported by the compositor transport and modesetting stack;
+4. source-buffer access and completion guarantees for GLX/DRI3/Present paths;
+5. Composite extension negotiation, generation/release protocol and compositor restart behavior;
+6. full-window coverage, maximum dimensions, tiled-buffer strategy and failure transition;
+7. tests proving the legacy path is unchanged with no provider, including proprietary NVIDIA DDX testing on real supported hardware.
+
+No Xserver source code has been changed by this design work. This section does not authorize implementation.
