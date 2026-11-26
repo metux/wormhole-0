@@ -1375,7 +1375,7 @@ No Xserver source code has been changed. This remains a design proposal; impleme
 
 ### 30.11 Buffer-generation state machine and compositor synchronization
 
-This subsection defines the proposed v1 lifecycle more precisely. It is a design proposal, not a frozen wire protocol or implementation authorization. The detailed review was performed against Xserver master HEAD `f6df545643f02d04d06ac08f7c81f4da05f7c4cc`; a final cross-check against the subsequently advanced current master HEAD `ee4791f92516141a45b9014aaab7d0eff6afdd3a` confirmed that the relevant Glamor native-fence helper, EGL private state, and modesetting dynamic Glamor-loading/GBM integration are unchanged. Use the latest Xserver master HEAD as the implementation baseline and recheck before coding.
+This subsection defines the proposed v1 lifecycle more precisely. It is a design proposal, not a frozen wire protocol or implementation authorization. The detailed review was performed against Xserver master HEAD `f6df545643f02d04d06ac08f7c81f4da05f7c4cc`; a final cross-check against the subsequently advanced current master HEAD `ee4791f92516141a45b9014aaab7d0eff6afdd3a` confirmed that the relevant Glamor native-fence helper, EGL private state, and modesetting dynamic Glamor-loading/GBM integration are unchanged. A further current-master refresh to `31f845bec4425e1b2048c7763497d752dfe05352` (commit `modesetting: record the probed DRM node before claiming an fb slot`) again confirmed the Glamor fence helper and modesetting integration unchanged. Use the latest Xserver master HEAD as the implementation baseline and recheck before coding.
 
 #### Two distinct lifetimes
 
