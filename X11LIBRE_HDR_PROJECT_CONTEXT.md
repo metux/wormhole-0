@@ -456,3 +456,17 @@ Owner correctly noted that DRI has used FD passing successfully for years. Audit
 - Limits remain: `SetReqFds()` only logs mismatches and overwrites the expected-to-consume counter; Xtrans does not retain ancillary group boundaries; `appendFd()` silently closes on allocation failure and its callers still report success. Also test output ordering if an earlier flush leaves bytes buffered after EAGAIN before a later FD-bearing reply.
 - Revised HDR spec section 30.23: preserve legacy FIFO API, use explicit per-message FD counts and ordered consumption, harden allocation/truncation/error handling additively, and add tests for read-ahead, multiple FD-bearing requests, interleaved ordinary requests, count mismatches/extras, and output backpressure. Sections 30.20–30.21 are superseded where they require exact offsets universally or propose replacing the FIFO.
 - No Xserver implementation or protocol XML was changed.
+
+
+## 2026-11-26 — Xtrans FD queue allocation failure PR
+
+Opened draft [X11Libre/xserver PR #4232](https://github.com/X11Libre/xserver/pull/4232), branch `fix/xtrans-fd-queue-allocation-failure`, head `401caa60a35ccb18ce7072528b34b754f7d6d031`, based on master `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`.
+
+- `appendFd()` now returns `-1/ENOMEM` without closing the FD on allocation failure.
+- Send-side queueing propagates the failure, leaving FD ownership with the caller.
+- Receive-side allocation failure closes the failed and remaining descriptors from the current ancillary message plus all descriptors already queued on that connection, then fails the read with `ENOMEM`.
+- Added Linux tests through the actual Xtrans local transport API. Linker-wrapped `malloc()` injects failure in send queueing and partway through a multi-FD receive; tests check caller ownership, exact FD cleanup and empty FIFO.
+- CI had not started/returned at the last exact-head check; combined status was empty. No local build/test run is claimed. PR remains draft and requires code/CI review.
+- PR #4232 touches `os/Xtranssock.c`, also modified by #4231. Coordinate merge/rebase order; neither PR is considered merge-ready until exact-head CI and review pass.
+
+This PR hardens the established DRI3-compatible FIFO; it does not introduce byte-offset association or change the public Xtrans API.
