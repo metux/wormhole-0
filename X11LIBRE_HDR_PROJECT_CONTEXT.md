@@ -546,3 +546,10 @@ All four replacement PRs are draft, each contains exactly one commit, and CI was
 - #4231 remains at 60a22b75864952817bd1589deac81571574ce5a7; exact-head CI run 45904923410 is still pending with no jobs published yet.
 - PR #4232 body and tracker should cite e82644d..., not superseded b8febd...
 - No further code changes until current runs start; no PR merged.
+
+## Final stacking cleanup — #4232 diff normalized to allocation-only (2026-11-26 22:40Z)
+
+- Normalized test/xtrans-fd-trunc.c in #4232 to be byte-identical to the prerequisite #4231 branch. This removes an accidental one-blank-line difference that made GitHub count it as a sixth changed file.
+- Current #4232 head is now 2429f7f00860501602a86452f59b037895a0c925, parent #4231 current head 60a22b75864952817bd1589deac81571574ce5a7. The actual PR patch now lists exactly five files: os/Xtranssock.c, test/meson.build, test/tests.c, test/tests.h, test/xtrans-fd-alloc.c. Exact-head CI run 45905471008 is pending.
+- #4231 remains at 60a22b75864952817bd1589deac81571574ce5a7 with run 45904923410 pending.
+- No PR merged. Current #4232 remains based on #4231; after #4231 merges, rebase/retarget #4232 to updated master and rerun CI.
