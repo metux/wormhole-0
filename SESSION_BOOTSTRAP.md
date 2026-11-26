@@ -207,3 +207,14 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - Both exact-head Actions runs `45796376211` and `45796386407` passed all three jobs: Go build/vet/full tests on stable and Go 1.22.x, plugin bundle/typecheck and plugin unit tests.
 - Closed PR #23 as superseded (not merged); added cross-links/comments to both PRs. PR #25 remains Draft and open. Published a fresh read-only request to Discovery for a detailed report on the new exact head: `w0-20261126T095710Z-pr25-review-detail` (publication commit `b45440a6d95887b1e6d14a0d43b941567bbdb322`). The manager moved it to `mail/Discovery/processed/`, proving import only; no explicit model acknowledgement or detailed report is yet visible. Do not merge #25 until the detailed review evidence is reconciled and the owner authorizes it.
 - No local tests were run; all test evidence above is from GitHub Actions. No local worktree or ship runtime was accessed.
+
+
+## Starfleetctl task-marker decision and PR #26 — 2026-11-26 10:32Z
+
+- Owner decision is recorded in `decisions/2026-11-26--dashboard-topic-reference-not-acceptance.md`: a `Dashboard-Topic` marker in a commission message is a reference only. Delivery/import/injection does not accept or start the task and must not automatically associate it with the ship.
+- Acceptance is explicit via `starfleetctl task begin <slug>`; task progress/completion use the existing lifecycle. Plugin heartbeats are liveness-only and must not overwrite task state. This supersedes marker-based auto-adoption.
+- Separate draft PR [#26](https://github.com/mpbt-hq/starfleetctl/pull/26), branch `fix/task-topic-reference-not-adoption`, latest head `de904b94b9362370421759fa150e90efd27986d0`, base `master` at `bf6144ebae79c41a166ce6695f9affcf67402bcd`.
+- PR #26 removes automatic marker parsing, removes the plugin-local `currentTask` mirror, makes heartbeats liveness-only, initializes plugin/session-created status as idle, keeps explicit task commands, adds a Node source-contract regression test to the existing `make check-plugin` path, and updates the task skill plus Comms SOP.
+- Exact-head Actions run `45801988599`: plugin-typecheck / `make check-plugin` passed; Go build and vet passed on stable and Go 1.22.x; Go test suites were still running at this checkpoint. No local test run.
+- PR #25 remains Draft/open and must not be rebased or merged yet. After PR #26 is reviewed and merged, refresh all Starfleetctl branch heads and rebase the active dependent branches (including `feat/comms-event-pipeline-clean-history` / PR #25 and the lifecycle branch) onto the new master. Preserve the no-force-push rule: if a published branch requires history rewriting, use a replacement branch/PR rather than force-pushing. Inventory obsolete/superseded branches before deciding whether they still need updating.
+- No local worktree was used; no other branch was modified. Session remains Starfleetctl-only.
