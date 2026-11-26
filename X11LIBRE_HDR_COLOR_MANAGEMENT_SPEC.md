@@ -912,19 +912,70 @@ The implementation may combine steps 3–6 into a precomputed 3x3 matrix plus sc
 1. ~~Approve linear Bradford as the fixed v1 CAT for relative-colorimetric source RGB descriptions?~~ **Approved by owner, 2026-11-26.**
 2. ~~Approve full adaptation only (no partial adaptation control in v1)?~~ **Approved by owner, 2026-11-26.**
 3. ~~Define the explicit source-description distinction between relative-colorimetric RGB and absolute-colorimetric / already-adapted PCS data?~~ **Approved by owner, 2026-11-26.**
-4. Define ICC profile ingestion and CMM ownership so source adaptation occurs exactly once.
+4. ~~Define ICC profile ingestion and CMM ownership so source adaptation occurs exactly once.~~ **Owner decision, 2026-11-26: defer arbitrary ICC profiles and CMM integration beyond v1; use parametric Color Descriptions only.**
 5. Define validation tolerances and canonical white-point precision for identity detection and matrix caching.
 
-### 26.6 ICC profile ingestion and CMM ownership (proposal; approval pending)
+### 26.6 ICC profile ingestion and CMM ownership (v1 owner decision)
 
-For the first protocol version, prefer **parametric Color Descriptions** (primaries, white point, transfer function, luminance semantics and the explicit relative/absolute interpretation) over arbitrary embedded ICC profiles. Do not advertise arbitrary ICC profile ingestion until the server-side CMM contract, rendering-intent behavior, profile lifetime/cache rules and exact PCS semantics are specified.
+**Owner-approved for v1 (2026-11-26): support parametric Color Descriptions only; defer arbitrary embedded ICC profiles and CMM integration.**
 
-If ICC profile support is added later:
-- One clearly identified CMM owns execution of the ICC profile transform and its rendering intent. Do not split profile processing ambiguously between clients, the Xserver and compositor.
-- The CMM result must declare whether it is relative or absolute colorimetric and identify its PCS adopted white / scale.
-- Xlibre then performs only the required PCS-to-working-space conversion. For a D50-adapted PCS this means one defined D50-to-D65 adaptation; it must not reapply the profile's source RGB adaptation matrix.
-- The conversion path must preserve absolute luminance semantics and must not infer them from the ICC profile's transfer curve alone.
+The v1 Color Description model carries explicit, validated parameters: RGB primaries, white point, transfer function, luminance/reference-white semantics and the relative-versus-absolute colorimetric interpretation. It does not carry an arbitrary ICC profile blob or require a general-purpose CMM.
 
-This keeps the initial implementation deterministic and avoids making a specific CMM dependency a prerequisite for the first color-managed path. The exact ICC profile API and CMM integration remain open.
+Rationale:
+- Keeps the first source-to-working transform deterministic and bounded.
+- Avoids ambiguity over rendering intent, profile connection space (PCS), profile-specific chromatic adaptation and which component owns CMM execution.
+- Avoids making a CMM dependency a prerequisite for the first color-managed path.
 
-The approved decisions in sections 26.1 and 26.2 are design direction, not a frozen wire ABI. This section does not authorize Xserver implementation. The extension protocol, validation tolerances, canonical numeric representation and remaining open questions must be resolved before implementation.
+Future ICC support requires a separate owner decision and design covering one clearly identified CMM, rendering-intent behavior, profile lifetime/cache rules, PCS adopted white/scale and exactly-once adaptation. It must not be added implicitly to v1.
+
+### 26.7 Remaining section-26 work
+
+Validation tolerances and canonical white-point precision for identity detection and matrix caching remain open. HLG remains gated pending system-gamma / nominal-peak semantics; non-finite FP16 input/output policy remains open.
+
+The decisions in sections 26.1, 26.2 and 26.6 are owner-approved design direction, not a frozen wire ABI. They do not authorize Xserver implementation. The extension protocol, validation tolerances, canonical numeric representation and remaining open questions must be resolved before implementation.
+
+## 27. Direct output conversion when no compositor is active (design proposal)
+
+### 27.1 Motivation and separation from the compositor path
+
+When no compositor is active, X11 does not normally expose a separately composited, color-managed buffer for every window. The server and clients update the screen/root presentation surface, and the display engine scans that final desktop image out to one or more outputs.
+
+In this mode, it may be more efficient and architecturally correct to convert the **final desktop image independently for each output** into that monitor's selected output color space, rather than first converting every window into the compositor-facing common working space. This is a separate output path, not a change to the owner-approved compositor handoff.
+
+The two paths have different responsibilities:
+- **Compositor active:** transform each source window into the common, output-independent linear BT.2020 / D65 working space (203 cd/m² scale); hand the transformed buffers to the negotiated compositor interface. The compositor performs spatial composition; the output stage then converts the composed result for each output.
+- **No compositor:** preserve the normal non-redirected desktop rendering path where possible, then apply an output-specific transform to the final desktop image for each CRTC/output immediately before scanout. The target is that output's selected encoding and color volume, not the common compositor handoff format.
+
+### 27.2 Why conversion must be per output and late
+
+A desktop can span outputs with different primaries, white points, transfer functions, bit depths and luminance capabilities. A window may cross an output boundary, and an output may be cloned or reconfigured. Therefore a single globally transformed root pixmap cannot in general be correct for all outputs.
+
+The conversion must happen after the desktop image has been spatially assembled and be independently selectable per output. Candidate mechanisms, in preference order:
+1. **Per-CRTC DRM/KMS color pipeline:** use supported degamma LUT, CTM and gamma LUT (and any future 3D LUT or equivalent blocks) to perform the output transform in hardware. This is attractive because the same source framebuffer can feed multiple CRTCs while each CRTC applies its own transform.
+2. **Per-output GPU/shader conversion:** render or copy the relevant desktop region into an output-specific scanout buffer, applying the full output transform. This is needed when the hardware color pipeline cannot express the required transform or lacks sufficient precision/range.
+3. **Constrained legacy fallback:** retain the existing untransformed SDR scanout when no correct transform is available. Do not silently claim HDR or color-managed output merely because the monitor advertises HDR capability.
+
+A single shared buffer preconverted for one monitor must not be scanned out unchanged to another monitor requiring a different transform. If outputs are cloned, they may share a transformed buffer only when their effective output transforms are equivalent.
+
+### 27.3 Output transform responsibilities
+
+The per-output transform owns:
+- Conversion from the desktop/source working representation into the output's native or selected RGB primaries and white point.
+- Output transfer-function encoding (for example sRGB/SDR or PQ when explicitly enabled and supported).
+- Output luminance mapping, tone mapping and gamut mapping as required by the output's actual capabilities and selected mode.
+- Correct output signaling and metadata through the DRM/KMS path.
+
+Sink EDID capabilities are constraints, not outgoing frame metadata. The server must derive output encoding and HDR metadata from the actual composed frame and selected output mode, not copy the monitor's EDID HDR static metadata verbatim.
+
+Hardware gamma LUT alone is not assumed to implement a complete HDR transform: it may be only a 1D per-channel stage and may not provide the required 3D gamut mapping, tone mapping, precision or range. Capability discovery and an explicit fallback are required.
+
+### 27.4 Important limits and unresolved questions
+
+- This path is not a substitute for per-window color management. Without per-window redirection/buffers, source colors have already been rasterized into the desktop surface. Rich per-window HDR Color Descriptions may require internal redirection/composition or a future rendering contract; do not pretend a final-output transform can recover source semantics that were lost during rasterization.
+- Legacy unmanaged SDR can use a defined session-level SDR interpretation and then be mapped at the output stage. The compositor-path LegacySDRReferenceWhite policy must be reconciled carefully with this direct-output pipeline; it must not be applied twice.
+- If the server's screen pixmap is shared by multiple outputs, output-specific shader conversion needs separate per-output targets or an equivalent hardware per-CRTC pipeline.
+- Present flips, direct scanout, overlays, hardware cursors and video planes may bypass the primary-plane color pipeline or have separate color properties. Their color behavior must be audited; a correct primary-plane transform does not prove every plane is color-managed.
+- RandR gamma controls and calibration semantics must be kept distinct from the full source-to-output color transform. Existing gamma ramps are not automatically a suitable HDR color-management API.
+- Output hotplug, mode changes, clone topology and transform updates require atomic/synchronized state changes so a partially updated frame is never shown.
+
+Open design work includes the exact server/driver ownership boundary, KMS property discovery and capability model, transform implementation fallback, multi-output scanout lifecycle, per-plane behavior, direct-scanout policy, and tests. This is a design proposal only; it does not authorize implementation or freeze a protocol/API.
