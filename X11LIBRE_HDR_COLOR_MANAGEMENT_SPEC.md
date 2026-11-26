@@ -816,16 +816,16 @@ The implicit profile applies only to windows without explicit color metadata. An
 
 ### 25.2 Default and rationale
 
-**Default: 80 cd/m².** This follows the conventional sRGB reference-viewing assumption, under which sRGB white is represented at 80 cd/m². It is not a claim about the physical peak luminance of the connected monitor.
+**Default: 203 cd/m².** In the negotiated HDR compositor path, legacy SDR graphics white is anchored to the common HDR reference white (203 cd/m²). This follows current HDR compositing guidance for mixing SDR and HDR content. It is not a claim about the physical peak luminance of the connected monitor.
 
-The common working-space scale remains unchanged: neutral working-space RGB 1.0 is 203 cd/m². Consequently, an implicit legacy sRGB white at the default setting maps to neutral working-space RGB approximately 80/203 = 0.3941. If the session setting is 203 cd/m², legacy SDR white maps to working-space RGB 1.0.
+The common working-space scale remains unchanged: neutral working-space RGB 1.0 is 203 cd/m². Consequently, an implicit legacy sRGB white at the default setting maps to neutral working-space RGB 1.0. If the user/session chooses 80 cd/m², it maps to approximately 80/203 = 0.3941; at 100 cd/m² it maps to approximately 0.4926.
 
 This distinction is intentional:
-- 80 cd/m² is the conventional sRGB reference-viewing white.
-- 203 cd/m² is the HDR reference / graphics white used by the selected common working-space scale.
-- The user or session policy may choose to raise legacy SDR white (for example, to 100 or 203 cd/m²) to suit an HDR desktop environment.
+- 80 cd/m² is the conventional sRGB reference-viewing white in an SDR reference-display context.
+- 203 cd/m² is the HDR reference / graphics white used by the selected common working-space scale and the recommended anchor for SDR graphics when composited with HDR.
+- The user or session policy may choose a lower value (for example, 80 or 100 cd/m²) to suit viewing conditions or personal preference.
 
-The choice of 80 cd/m² as the default is supported by the sRGB reference-viewing assumptions described in the W3C CSS Color HDR draft and by the corresponding sRGB defaults in the Wayland color-management protocol. Those are references for luminance semantics, not protocol dependencies.
+The 203 cd/m² default is supported by the W3C CSS Color HDR draft, which identifies 203 cd/m² as HDR reference white and says SDR content should be anchored to that level when composited with HDR. The 80 cd/m² sRGB reference-viewing value remains a useful configurable alternative; it is also reflected in the Wayland color-management protocol's default sRGB luminance semantics. These are references for luminance semantics, not protocol dependencies.
 
 ### 25.3 Configuration scope and behavior
 
@@ -842,7 +842,14 @@ Explicit per-window Color Descriptions remain authoritative. Changing the legacy
 The owner approves the following design direction:
 1. Keep the common working space as output-independent linear BT.2020 / D65 with 1.0 = 203 cd/m².
 2. Use negotiated RGBA FP16 for the transformed compositor handoff, with linear premultiplied alpha; capability negotiation and a defined fallback remain required.
-3. Interpret unmanaged legacy windows as sRGB/D65 and use a session-wide configurable reference-white value, defaulting to 80 cd/m².
-4. Keep that setting independent of output/monitor; explicit Color Descriptions override it.
+3. Interpret unmanaged legacy windows as sRGB/D65 and use a session-wide configurable reference-white value, defaulting to 203 cd/m² to anchor SDR graphics to HDR reference white.
+4. Keep that setting independent of output/monitor; explicit Color Descriptions override it. Lower values such as 80 or 100 cd/m² remain configurable.
 
 Still open: exact configuration interface/range, chromatic-adaptation method, HLG absolute-luminance assumptions, non-finite floating-point input policy, and the final wire ABI / compositor handoff protocol. These decisions do not authorize Xserver implementation.
+
+
+### 25.5 Clarification: SDR reference viewing versus HDR composition
+
+The default above is specifically for the **HDR color-managed composition path**. It must not be confused with the conventional sRGB reference-display viewing condition, where sRGB white is commonly described as 80 cd/m². When legacy SDR content is mixed with HDR content, the proposed default anchors its white/graphics-white level to 203 cd/m² HDR reference white. The setting allows users or session policy to select a lower luminance (including 80 or 100 cd/m²) when desired.
+
+This distinction is important because the implicit source profile's transfer function/primaries and the luminance assigned to its white are separate semantics. The legacy default remains sRGB/D65; only its session-level reference-white mapping is configurable.
