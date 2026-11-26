@@ -271,3 +271,14 @@ No Xserver implementation changes were made. No implementation authorization fol
 
 
 Further source audit detail (same Xserver master HEAD `bb06f6ddca766c41c81494ae228c11e53df59590`): the normal modesetting screen pixmap is backed by a shared `front_bo`; CRTC scanout normally uses its own source origin, while PRIME paths may select per-CRTC scanout pixmaps. KMS gamma-LUT/CTM properties are CRTC-scoped, so cloned connectors on one CRTC share that state; per-connector distinct pixel transforms cannot be assumed. Cursor planes and cursor DRM operations are separate from primary-plane pixels. Present format/modifier checks require support across all enabled CRTCs, so a new FP16 screen-pixmap requirement could regress existing flips or initialization. See spec section 28.7.
+
+
+## 2026-11-26 — ScreenRec ABI / private operation-table audit
+
+Xserver master was refreshed at `3132e4b7997b525d046e727c1db6656d14b5bc20`. Owner prefers that any new HDR screen/backend operations be attached through additional DIX private state rather than by extending ScreenRec.
+
+Verified distinction: ScreenRec's legacy `void *devPrivate` is a single opaque DDX pointer and must not be repurposed; `PrivateRec *devPrivates` is the DIX-managed private-key store and is the appropriate attachment. Do not change `DevPrivateType` / `PRIVATE_LAST`: `screenSpecificPrivates[PRIVATE_LAST]` is embedded in ScreenRec, so its size affects ScreenRec layout. Use the existing PRIVATE_SCREEN key type with a core-owned key and private record. `dixRegisterPrivateKey()` supports late registration and fixes up both regular and GPU screen private allocations. Core must own key/record lifetime; copy and validate an optional versioned operations table and clear callbacks before backend teardown. No registration means no HDR operations and legacy SDR continues.
+
+The NVIDIA compatibility shim is unusually explicit: `CONFIG_LEGACY_NVIDIA_PADDING` conditionally inserts `reserved_for_nvidia_470_and_390` between `NameWindowPixmap` and `totalPixmapSize`; Meson option `legacy_nvidia_padding` controls it; `xf86Module.h` selects ABI 28.1 vs 28.0; `LoaderGetABIVersion()` reports special NVIDIA ABI 25.2 when padding is enabled and the module is identified as proprietary NVIDIA. `dix/pixmap.c` initializes the reserved field to NULL. The separate `legacy_nvidia_340x` option concerns old entry points. HDR must not change any of these layouts, options, or loader decisions.
+
+Detailed owner direction, lifetime constraints and test matrix: spec section 29. Durable decision: `decisions/2026-11-26--hdr-screen-private-ops-and-nvidia-abi.md`. No Xserver source was modified and no implementation is authorized.
