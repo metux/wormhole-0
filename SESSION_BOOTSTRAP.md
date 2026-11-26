@@ -246,10 +246,11 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 ## Starfleetctl continuation — PR #29 merged, plugin parity PR #31, event-pipeline replacement PR #32 — 2026-11-26 12:05Z
 
 - **PR #29 merged:** [#29](https://github.com/mpbt-hq/starfleetctl/pull/29) merged at `6e693d1d14299763911783beb68b6a9d39a303f5` (2026-11-26T11:55:36Z). Repository only permits rebase merges; merge used rebase with expected head `a7945d5800ef245c2faf98bb41e0d661effb8003`. Exact-head CI `45804837499` passed. Master is now `6e693d1d14299763911783beb68b6a9d39a303f5`.
-- **Plugin bootstrap parity:** [PR #31](https://github.com/mpbt-hq/starfleetctl/pull/31), branch `test/bootstrap-plugin-asset-parity`, head `57308d2be1ac9c58fd3b1a5522062e8f77b85b1b`, open/ready for review/not merged. Exact-head Actions run `45815535581` completed successfully: plugin-typecheck and Go build/vet/full tests on Go 1.22.x and stable.
+- **Plugin bootstrap parity:** [PR #31](https://github.com/mpbt-hq/starfleetctl/pull/31), branch `test/bootstrap-plugin-asset-parity`, head `2466562ebb72ccda5953c2b8dfc3af6993d5af8a`, open/ready for review/not merged. Exact-head Actions run `45816662501` completed successfully: plugin-typecheck and Go build/vet/full tests on Go 1.22.x and stable.
   - Recursively discovers runtime assets under `fragments/opencode-plugins/`, compares canonical source, embedded FS, and the complete fresh bootstrap installation; verifies byte identity and entry-point registration/helper non-registration.
   - The installed directory is compared as a complete file set, so non-runtime test/config/declaration files cannot leak into it.
-  - Negative tests cover missing installed helper, unregistered entry point, missing/unexpected set entries, and unclassified extensions.
+  - Bootstrap detects and removes legacy `.test.ts` / `.test.mjs` files and `.test.ts` plugin registrations left by older versions, preserving unrelated user plugin registrations.
+  - Negative tests cover missing installed helper, unregistered entry point, missing/unexpected set entries, unclassified extensions, and migration from a legacy install.
   - Replaced the manually maintained helper-name list with discovery.
   - Found/fixed a real bug: bootstrap previously treated colocated `.test.ts` and `.test.mjs` as runtime plugins, installing/registering tests. Runtime classification now excludes those.
   - Issue #30 has a comment linking PR #31 and its exact CI evidence. PR #31 has not been merged.
@@ -276,3 +277,11 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - PR #32 body now records full green CI and the closure of old PR #25. PR #32 remains Draft; no merge performed.
 - Issue #30 links PR #31 and its test evidence. Issue #24 records that the two old lifecycle/event-pipeline refs are duplicate superseded PR #23 trees and that the active lifecycle branch should be created from master after PR #32 is merged.
 - Remaining branch inventory unchanged: `feat/comms-event-lifecycle` and `feat/comms-event-pipeline` both at `d161b1b81292d11c5f375684db05df1d59c7f9e1` with no unique lifecycle work; historical backup `0765d18...` stays untouched. No force-push, no local tests, no ship restart.
+
+
+### Starfleetctl PR #31 follow-up — legacy test asset migration — 2026-11-26 12:08Z
+
+- PR #31 head advanced to `2466562ebb72ccda5953c2b8dfc3af6993d5af8a`; latest exact-head CI run `45816662501` is fully green (plugin-typecheck; Go build/vet/full tests on stable and Go 1.22.x).
+- Additional migration regression test now seeds a temporary workspace with legacy-installed `.test.ts` / `.test.mjs` files and a registered test entry point, runs the real installer, and verifies those leftovers are removed while unrelated user plugin registrations survive.
+- Production `verifyOpencodePlugins` now reports stale test files/registrations, and `fixOpencodePlugins` cleans them. This avoids leaving a test plugin loaded in existing workspaces after upgrading the bootstrap binary.
+- PR #31 remains open/ready for review/not merged. PR #32 remains open/Draft/not merged with green exact-head CI run `45815962061`. Old PR #25 remains closed as superseded. No other branch refs were force-pushed.
