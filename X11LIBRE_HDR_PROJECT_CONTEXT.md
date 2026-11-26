@@ -300,3 +300,14 @@ Xserver `master` was refreshed at `3132e4b7997b525d046e727c1db6656d14b5bc20`; wo
 - Exact provider API, transport, Composite wire contract, full source-path coverage, dimension/tiling policy and failure transition remain open.
 
 No Xserver source code was changed. This is a design proposal, not implementation authorization.
+
+
+### Follow-up: modesetting / Glamor dynamic module lifecycle
+
+A further read of `hw/xfree86/drivers/video/modesetting/driver.c` at Xserver HEAD `3132e4b7997b525d046e727c1db6656d14b5bc20` refined section 30:
+- modesetting loads `GLAMOR_EGL_MODULE_NAME` through `xf86LoadSubModule()` and resolves Glamor functions using `LoaderSymbolFromModule()`; function pointers live in the per-screen modesetting record.
+- `try_enable_glamor()` only enables Glamor after `egl_init2` succeeds. Existing `glamor_gbm` only proves the current texture-GBM-BO capability, not FP16 renderability/export or compositor synchronization.
+- The provider should be owned by modesetting and delegate to new optional Glamor helper symbols resolved separately. Missing symbols or failed feature probes mean HDR unavailable, not DDX initialization failure.
+- modesetting `CloseScreen()` frees BOs and may destroy GBM before chaining to the wrapped screen close path. The provider must quiesce and unregister core callbacks before those resources are destroyed; `FreeScreen()` later frees the modesetting record. The loaded Glamor module must remain pinned while callbacks can reach its function pointers.
+
+Specification section 30.9 records these concrete lifecycle constraints (follow-up spec commit `02770890c38c71304c04330e7cf08f79478af6c6`). No source code was changed.
