@@ -1030,3 +1030,17 @@ Test on real proprietary NVIDIA driver versions and supported GPU generations. U
 ### 28.6 Implementation gate
 
 No HDR path may become mandatory for server startup or legacy rendering. The first implementation must be opt-in, capability-gated, and independently disableable, with a demonstrably unchanged legacy path. Any proposed public driver ABI change requires a separate owner-reviewed compatibility plan. This section records a compatibility requirement; it does not authorize implementation.
+
+
+### 28.7 Multi-CRTC and plane implications from the source audit
+
+Further inspection of `drmmode_crtc_get_fb_id()`, `drmmode_glamor_handle_new_screen_pixmap()`, `drmmode_crtc_create_planes()` and the modesetting Present implementation establishes:
+
+- The normal modesetting screen pixmap is backed by the shared `front_bo`. A CRTC normally obtains that framebuffer ID and uses its own source origin (`crtc->x`, `crtc->y`); per-CRTC PRIME scanout can instead select a per-CRTC pixmap/target.
+- DRM CRTC color properties are attached to a **CRTC**, not independently to each connector. Two cloned connectors driven by the same CRTC therefore share that CRTC's gamma-LUT/CTM state. A distinct transform for each cloned connector cannot be assumed from CRTC properties alone. Connector-level colorspace signaling is a separate concern and is not equivalent to a full per-connector pixel transform.
+- Separate CRTCs can in principle apply independent CRTC color state while scanning different regions of a shared framebuffer. The current Xserver code demonstrates per-CRTC CRTC objects and scanout origins, but does not yet demonstrate a complete independently managed per-output HDR pipeline.
+- The modesetting driver discovers and selects a primary plane per CRTC. Cursor planes are identified separately and not selected as the primary scanout plane. Hardware cursor content is uploaded and positioned through cursor-specific DRM calls; it is not transformed by the primary framebuffer's color data path.
+- Present's format/modifier check iterates all enabled CRTCs and requires the candidate framebuffer format to be supported by each. A future FP16 or other HDR scanout format must not become the mandatory screen-pixmap format, because doing so could disable existing multi-CRTC flips or prevent a screen from initializing on less capable hardware.
+- The current gamma-LUT update uses a CRTC property write, while CTM is set separately; the inspected atomic modeset request does not yet bundle a complete color-pipeline state with framebuffer/mode changes. Any future color transform update must define atomicity with mode, connector, plane and framebuffer state rather than relying on these legacy gamma controls.
+
+Consequences for the no-compositor proposal: per-CRTC transforms are a plausible optimization for extended-desktop outputs with distinct CRTCs, but clone mode, connector-specific requirements, direct scanout, cursors and auxiliary planes remain separate cases. The safe fallback remains the existing SDR path.
