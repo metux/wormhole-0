@@ -1590,3 +1590,36 @@ On compositor disconnect, invalidate the connection epoch and stop new publicati
 Before freezing the ABI, review: extension naming and opcode allocation; compositor authority and Composite redirect integration; multi-screen/Xinerama semantics; Xtrans FD passing and XCB client-library support; max plane count and variable descriptor encoding; stale-event coalescing and backpressure; exact NO_USE semantics; failure behavior after partial FD send; per-window Color Description association; and security/resource access checks. Also verify the selected format/modifier and both native-fence directions with a real compositor.
 
 Source review at d96a26a11ca6ddc53050f4a96dd0becee9858077 confirms the server-side Composite and DRI3 mechanics described above, but does not yet verify client-library FD reception, transport behavior on every local transport, or compositor interoperability. No Xserver source code has been changed. This remains a design proposal and does not authorize implementation.
+
+### 30.13 XCB file-descriptor transport and generated-binding contract
+
+X11Libre/mirror.fdo.libxcb master was inspected at `aa7f3256060451ad65a38feeccf792f44181a4e0`. The following implementation facts are confirmed in `src/xcb_out.c`, `src/xcb_in.c`, `src/xcbext.h`, `src/xcbint.h` and `src/c_client.py`: 
+
+- Outgoing requests support `xcb_send_request_with_fds()` / `xcb_send_request_with_fds64()`. The implementation queues descriptors and sends them with the request using `sendmsg()`/`SCM_RIGHTS` when built with `HAVE_SENDMSG`.
+- Incoming replies support descriptor reception. `read_packet()` only interprets attached descriptors when the matching pending request was marked `XCB_REQUEST_REPLY_FDS`; it obtains the descriptor count from the reply's `pad0` byte, then stores received descriptors after the reply bytes in the allocated reply buffer.
+- `xcb_get_reply_fds()` returns the pointer to that appended descriptor array. Generated reply accessors are emitted by `c_client.py` when the protocol reply contains one or more `<fd>` fields. The generated accessor uses `sizeof(reply) + 4 * reply->length` to locate the array.
+- `c_client.py` automatically marks the request with `XCB_REQUEST_REPLY_FDS` when the reply contains FD fields, and emits the reply-FD accessor. Request-side `<fd>` fields generate calls to `xcb_send_request_with_fds()`.
+- XCB does not own received reply FDs: the generated API documentation explicitly requires the caller to close them before freeing the reply. Conversely, for outgoing requests XCB takes ownership of supplied FDs and closes them eventually.
+- The current libxcb implementation defines `XCB_MAX_PASS_FD` as 16. This is an implementation limit, not a protocol-wide X11 constant. FD passing is conditional on `HAVE_SENDMSG`; platforms/builds without it cannot implement this transport path.
+
+#### Consequences for the proposed extension
+
+1. The extension protocol description (xcb-proto XML) must declare the request-side release fence as an `<fd>` field and the reply-side DMA-BUF descriptors and producer fence as `<fd>` fields. Do not rely on hand-written raw XCB calls that omit the generated reply-FD flag.
+2. The AcquireBuffer reply must put the total number of attached FDs in the first reply pad byte (`pad0`, conventionally exposed in the server reply structure as `nfd`). It must equal the actual number of descriptors sent. XCB uses this byte to know how many ancillary FDs belong to the reply; the reply's ordinary payload length does not encode the FD count.
+3. The generated reply accessor returns an FD array stored immediately after the ordinary reply payload. The compositor must consume or duplicate the FDs as needed and close every received FD before freeing the reply object. It must not call `free()` on the returned FD-array pointer.
+4. The generated ReleaseBuffer wrapper should pass its fence through `xcb_send_request_with_fds()`. The caller must treat the supplied FD as transferred to XCB after the call, following the documented XCB ownership rule. The server calls `SetReqFds()` with the request-declared count before reading the FDs and validates the count against the NO_USE/fence mode.
+5. Keep the v1 FD count small. A provisional limit is at most four DMA-BUF plane-object FDs plus one producer fence FD (five FDs in an AcquireBuffer reply), and at most one release-fence FD in a ReleaseBuffer request. Plane records must identify which object FD backs each plane, so multi-plane layouts can share one underlying DMA-BUF object without requiring one FD per plane. This stays below the current libxcb limit of 16 without turning that implementation detail into the wire ABI.
+6. The transport is only available when both the X server's Xtrans path and the compositor's XCB build support FD passing. The server must reject/disable the color-managed handoff when its active transport cannot pass FDs. Client-side support cannot be inferred solely from the server's QueryCapabilities response: `HAVE_SENDMSG` is a client-library build property. The compositor integration must require an FD-capable libxcb build (or another explicitly tested XCB transport implementation) and fail closed if descriptor reception/sending is unavailable.
+7. A reply with FDs must only be requested through a generated binding that marks `XCB_REQUEST_REPLY_FDS`. If a client issues a raw request without that flag, libxcb will not associate the ancillary descriptors with the reply; unexpected leftover FDs can make the connection fail. This is another reason to ship the protocol XML and generated client binding together.
+
+#### Protocol sketch refinement
+
+- `AcquireBuffer` reply: ordinary payload includes epoch, window, generation, dimensions, format, modifier, plane count, object count and per-plane `(object_index, stride, offset)` records. The reply `nfd`/`pad0` byte equals `object_count + 1`; FDs are ordered as object FDs `[0..object_count-1]`, then the producer-fence FD last.
+- `ReleaseBuffer` request: explicit mode `FENCED` or `NO_USE`; `FENCED` carries exactly one `<fd>`, `NO_USE` carries zero. The server validates mode, declared FD count and actual received descriptors before changing lease state.
+- V1 limits `plane_count` to 1..4 and `object_count` to 1..4, with each plane's `object_index < object_count`. A malformed descriptor, unsupported modifier or FD-count mismatch rejects the acquisition and closes all server-owned duplicates; no buffer is published as leased.
+
+These are proposed v1 limits and wire semantics, not frozen protocol ABI. They should be checked against target compositors and the actual xcb-proto schema/generator before implementation.
+
+#### Verification limits
+
+Source review confirms libxcb's generic request/reply FD machinery and generated-binding support. It does not yet verify a concrete Xlibre color-management XML schema, generated client library, runtime transport on every supported platform, or compositor interoperability. The current XCB source's `HAVE_SENDMSG` conditional means FD support must remain an explicit runtime/build prerequisite. No Xserver source code has been changed.
