@@ -855,11 +855,11 @@ The default above is specifically for the **HDR color-managed composition path**
 This distinction is important because the implicit source profile's transfer function/primaries and the luminance assigned to its white are separate semantics. The legacy default remains sRGB/D65; only its session-level reference-white mapping is configurable.
 
 
-## 26. Chromatic adaptation and source-to-working transform (proposal; owner approval pending)
+## 26. Chromatic adaptation and source-to-working transform (owner-approved design; wire ABI open)
 
 ### 26.1 Recommended chromatic-adaptation method
 
-**Recommendation: use the linear Bradford chromatic adaptation transform (CAT) as the single mandatory v1 method for relative-colorimetric source RGB descriptions whose declared white point differs from D65.** Use full adaptation (degree of adaptation = 1); do not expose CAT selection or degree-of-adaptation as a per-window or per-output tuning knob in v1.
+**Owner-approved v1 decision: use the linear Bradford chromatic adaptation transform (CAT) as the single mandatory method for relative-colorimetric source RGB descriptions whose declared white point differs from D65.** Use full adaptation (degree of adaptation = 1); do not expose CAT selection or degree-of-adaptation as a per-window or per-output tuning knob in v1.
 
 Rationale:
 - ICC.1:2022 recommends linear Bradford when there is no specific reason to choose another CAT, citing broad implementation and demonstrated visual performance.
@@ -877,12 +877,12 @@ Apply `M_CAT` to XYZ values after transfer decoding and source RGB-to-XYZ conver
 
 A white-point chromaticity does not by itself tell us whether the source values should undergo appearance adaptation or preserve absolute measured colorimetry. This distinction must be explicit in the source-description model before the wire ABI is frozen.
 
-Proposed rule:
+**Owner-approved v1 semantic rule:**
 - Relative-colorimetric RGB source descriptions use the declared source white point and the fixed full Bradford transform to adapt that white to D65.
 - Absolute-colorimetric XYZ data, or a profile transform that already produces absolute colorimetric PCS values, must preserve its declared colorimetry and must not receive an additional implicit CAT.
-- ICC profile handling must follow the selected ICC rendering intent and profile/CMM transform semantics. If the ICC transform has already adapted the source to its PCS adopted white, Xlibre must adapt PCS to D65 exactly once, and must not separately reapply the profile's source-white adaptation matrix.
+- The source-description model must explicitly distinguish relative RGB semantics from absolute-colorimetric XYZ / already-adapted PCS data. This distinction must be versioned and must not be inferred from transfer function, primaries, or buffer format alone.
 
-The future Color Description protocol therefore needs an explicit, versioned way to distinguish relative source RGB semantics from absolute colorimetric data / already-adapted profile output. Do not infer this from transfer function, primaries, or buffer format alone.
+ICC profile ingestion and CMM ownership remain a separate open design question; see section 26.6.
 
 ### 26.3 Proposed source-to-working pipeline
 
@@ -909,10 +909,22 @@ The implementation may combine steps 3–6 into a precomputed 3x3 matrix plus sc
 
 ### 26.5 Open design questions
 
-1. Approve linear Bradford as the fixed v1 CAT for relative-colorimetric source RGB descriptions?
-2. Approve full adaptation only (no partial adaptation control in v1)?
-3. Define the explicit source-description distinction between relative-colorimetric RGB and absolute-colorimetric / already-adapted PCS data?
-4. Define ICC profile ingestion and CMM ownership so source adaptation occurs exactly once?
-5. Define validation tolerances and canonical white-point precision for identity detection and matrix caching?
+1. ~~Approve linear Bradford as the fixed v1 CAT for relative-colorimetric source RGB descriptions?~~ **Approved by owner, 2026-11-26.**
+2. ~~Approve full adaptation only (no partial adaptation control in v1)?~~ **Approved by owner, 2026-11-26.**
+3. ~~Define the explicit source-description distinction between relative-colorimetric RGB and absolute-colorimetric / already-adapted PCS data?~~ **Approved by owner, 2026-11-26.**
+4. Define ICC profile ingestion and CMM ownership so source adaptation occurs exactly once.
+5. Define validation tolerances and canonical white-point precision for identity detection and matrix caching.
 
-This section is a technical proposal only. It does not authorize Xserver implementation or freeze the extension wire ABI.
+### 26.6 ICC profile ingestion and CMM ownership (proposal; approval pending)
+
+For the first protocol version, prefer **parametric Color Descriptions** (primaries, white point, transfer function, luminance semantics and the explicit relative/absolute interpretation) over arbitrary embedded ICC profiles. Do not advertise arbitrary ICC profile ingestion until the server-side CMM contract, rendering-intent behavior, profile lifetime/cache rules and exact PCS semantics are specified.
+
+If ICC profile support is added later:
+- One clearly identified CMM owns execution of the ICC profile transform and its rendering intent. Do not split profile processing ambiguously between clients, the Xserver and compositor.
+- The CMM result must declare whether it is relative or absolute colorimetric and identify its PCS adopted white / scale.
+- Xlibre then performs only the required PCS-to-working-space conversion. For a D50-adapted PCS this means one defined D50-to-D65 adaptation; it must not reapply the profile's source RGB adaptation matrix.
+- The conversion path must preserve absolute luminance semantics and must not infer them from the ICC profile's transfer curve alone.
+
+This keeps the initial implementation deterministic and avoids making a specific CMM dependency a prerequisite for the first color-managed path. The exact ICC profile API and CMM integration remain open.
+
+The approved decisions in sections 26.1 and 26.2 are design direction, not a frozen wire ABI. This section does not authorize Xserver implementation. The extension protocol, validation tolerances, canonical numeric representation and remaining open questions must be resolved before implementation.
