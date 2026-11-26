@@ -219,3 +219,16 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - Exact-head Actions run `45804837499` completed successfully: plugin-typecheck / `make check-plugin`, Go build, vet, and full tests on stable and Go 1.22.x all passed. No local test run.
 - PRs #26, #27, and #28 were closed as superseded, not merged. PR #25 remains Draft/open. After PR #29 is merged, refresh all Starfleetctl branch heads and rebase the active dependent branches (including `feat/comms-event-pipeline-clean-history` / PR #25 and the lifecycle branch) onto the new master. Preserve the no-force-push rule: if a published branch requires history rewriting, use a replacement branch/PR rather than force-pushing. Inventory obsolete/superseded branches before deciding whether they still need updating.
 - No local worktree was used; no other work branch was rebased or modified. Session remains Starfleetctl-only.
+
+
+
+## Starfleetctl runtime / model-health tracking task — 2026-11-26 11:07Z
+
+- Owner requested a follow-up plan for dashboard-visible ship activity and model/provider failures. Canonical task: [Starfleetctl issue #30](https://github.com/mpbt-hq/starfleetctl/issues/30), `feat(status): track ship runtime and model health from turn events`.
+- Immutable Wormhole handoff published to `mail/ChatGPT/new/w0-20261126T110700Z-starfleet-runtime-health-issue30.md` (publication commit `c4414e2077df5863e67b36ac442d040367c2e4c3`). This is a pointer/handoff only; issue #30 is the authoritative task record, consistent with COLLABORATION.md.
+- Planned model: separate **runtime** (`starting|working|waiting|idle`) from **health** (`healthy|degraded|error|offline`) and from explicit **task lifecycle**. Plugin reports verified observations; Go owns validated transitions, persistence, stale/duplicate event rejection and offline expiry; CLI/dashboard expose the same projection.
+- First prerequisite is to verify the exact deployed OpenCode/plugin SDK event contract (names, payloads, ordering, awaited hooks) before implementing turn tracking. Correlate a specific assistant turn; do not infer completion from heartbeat, `seen_mark`, submission return, or unrelated `session.idle`.
+- Test matrix includes start/end, provider/model error, retry/degraded, recovery, process exit/heartbeat expiry, restart, duplicate/out-of-order/stale events, and regression that runtime telemetry never mutates task association.
+- **Bootstrap/packaging invariant explicitly required by owner:** every new plugin source/helper/runtime file must be added to canonical bootstrap/install/packaging manifests and their tests in the same change; verify generated/deployed plugin contents. Never leave helper modules uninstalled.
+- Sequencing: follow PR #29; reconcile PR #25 and issue #24 before choosing the implementation base/branch. Do not merge #29 or restart/relaunch ships without explicit owner approval. No force-push.
+- No implementation has started; issue #30 is open and unassigned. The Wormhole message is published, but no import/acknowledgement by another agent is claimed.
