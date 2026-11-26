@@ -108,3 +108,30 @@ Every milestone should test: no-HDR EDID, malformed/short EDID, unsupported KMS 
 - Wormhole communication protocol: `.claude/skills/wormhole-communication/SKILL.md`
 
 For cross-agent communication, acknowledgements, status updates and reports, follow the project-independent `wormhole-communication` skill and `COLLABORATION.md`.
+
+
+## 2026-11-26 — server-side pre-compositor transformation design
+
+Owner clarified the intended architecture in the dedicated HDR session:
+
+- The X server performs the color transformation of each window's content.
+- When a compositor is active, it must see only the already transformed window buffers.
+- The compositor remains responsible for spatial composition (stacking, placement, clipping, alpha, effects and blending); it does not perform per-window source color conversion.
+- This is not a request to move full window composition into the X server.
+
+A detailed working draft was added at `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md` (commit `44266969db36fe487cf8108f717101e3560cbca0`). It is explicitly a discussion draft, not normative and not implementation authorization. It records the above architecture, source/output separation, candidate working-space model, buffer lifecycle, Composite/Present/DRI3 concerns, failure/compatibility rules, tests, milestones and unresolved owner decisions.
+
+Important source-review findings against `X11Libre/xserver:master` HEAD `8f47e0e2dd7a9f2dec43acffb2cf0f80b68e5b8e`:
+
+- `CompositeNameWindowPixmap` currently gets the current window pixmap via `GetWindowPixmap()`, registers a resource reference and optionally calls `Screen->NameWindowPixmap()`. The existing DDX hook has not been shown to replace the pixmap resource returned to the Composite client.
+- Present can change the pixmap associated with a window through `present_set_tree_pixmap()`; successful flips update window/root pixmap associations and report Damage. Therefore, a one-time transform during the first `CompositeNameWindowPixmap` request cannot keep compositor content current.
+- Composite redirection itself uses offscreen window pixmaps and `SetWindowPixmap`; this internal drawing/storage path must remain distinct from the transformed compositor-facing buffer.
+- The design must not globally change `GetWindowPixmap` semantics or redirect ordinary X server drawing into the transformed buffer.
+- A stable transformed pixmap object with updated contents is one candidate, but its resource/refcount, resize, Present replacement, Damage ordering and compositor-held-XID semantics need further investigation before choosing it.
+
+Next HDR design work:
+1. Reconstruct the exact CompositeNameWindowPixmap resource and pixmap lifetime semantics, including what happens when the window pixmap changes after the compositor has named it.
+2. Trace Composite redirection, Damage registration/callback ordering and Present copy/flip paths end-to-end.
+3. Compare a stable transformed pixmap object against a new versioned Composite/color-management contract; do not assume the DDX NameWindowPixmap hook is sufficient.
+4. Refine the spec with evidence and mark unresolved decisions for owner review.
+5. Do not modify Xserver implementation until the design gates in the spec and owner authorization are satisfied.
