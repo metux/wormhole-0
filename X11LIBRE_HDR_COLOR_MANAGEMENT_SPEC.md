@@ -1812,3 +1812,49 @@ Server validation enforces (FENCED, 1) or (NO_USE, 0). The XML generator exposes
 7. Validate schema with the actual xcb-proto `xcbgen`/libxcb generator, compile generated bindings, and run a real client/server FD round trip including zero-FD NO_USE, one-FD release, multi-object acquire, malformed counts, partial send failure and client disconnect.
 
 No XML, generated binding, Xserver source, tests or runtime behavior were changed.
+
+
+
+## 30.18 — Xtrans FD transport audit and strict FD-count validation
+
+Current Xserver `master` was rechecked at `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`. Relevant blobs:
+- `Xext/dri3/dri3_request.c`: `9edb26e698926952e644ffa36ae5d2044794a6b8`
+- `os/io.c`: `c2cc09135b321904ba881aced346dc3b0ee2c669`
+- `os/Xtranssock.c`: `5ae47b6fed434eab208d7b14f5180514d0d45041`
+- `dix/dixstruct_priv.h`: `8ac7e369bae6db06188330713aa0d86fa6cac33e`
+- `include/dixstruct.h`: `ffe858ddcdbaec4c1da9e321d37bfc589e50bfb8`
+- `include/meson.build` and generated server config expose `XTRANS_SEND_FDS`.
+
+### Confirmed transport scope
+
+- Meson enables `XTRANS_SEND_FDS` when `sys/socket.h` exposes `SCM_RIGHTS`.
+- Xtrans socket transport tables wire real FD send/receive callbacks for `local` and `unix` domain sockets.
+- TCP/INET/INET6 transports explicitly wire `_XSERVTransSocketSendFdInvalid()` and `_XSERVTransSocketRecvFdInvalid()`, which return `-1` with `EINVAL`.
+- Therefore compile-time `XTRANS_SEND_FDS` or a generic “local client” classification is not sufficient proof that this particular connection can pass FDs. A loopback TCP connection is still on a transport whose FD callbacks are invalid.
+- The HDR capability must be connection-specific as well as screen/backend-specific. QueryCapabilities/AcquireCompositor must not advertise or activate FD handoff unless the actual Xtrans connection supports both ancillary receive and send. Unsupported transport returns UNSUPPORTED and leaves legacy Composite untouched. A transport capability query/helper may be needed; do not infer from address alone.
+
+### Confirmed server-side FD-count handling and a required strict check
+
+- `ClientRec` contains `req_fds`. Xtrans queues ancillary FDs received with the request; `ReadFdFromClient()` decrements `req_fds` and obtains the next queued FD.
+- Existing `SetReqFds(client, n)` only logs when a nonzero existing count differs, then overwrites `client->req_fds`. It is not a strict validation API.
+- After request dispatch, `os/io.c` drains and closes any unused request FDs. Thus an extension must not rely on the generic cleanup to detect an over-supplied FD list.
+- Before calling `SetReqFds()`, the new request handler must compare the actual received `client->req_fds` against the request's declared `fd_count`; mismatch is a protocol error. Then set/consume exactly that count and verify all expected descriptors were received. This is especially important for ReleaseBuffer: NO_USE with an unexpected FD must never be treated as a valid no-read release.
+- This is a new extension-handler requirement; do not change legacy DRI3/SHM behavior as part of this design note.
+
+### Newly discovered Xtrans reliability blocker
+
+At `os/Xtranssock.c` around lines 1154–1233:
+- `appendFd()` returns void.
+- If allocation of its queue node fails, it closes the FD and returns, with a comment saying the connection should be marked broken.
+- `_XSERVTransSocketSendFd()` calls `appendFd()` and unconditionally returns 0.
+- Consequently, `WriteFdToClient()` can report success even when the FD was not queued because the transport's internal queue allocation failed. The same void helper is used when queuing received FDs.
+
+This means the current return value of `WriteFdToClient()` is not a sufficient proof that the ancillary FD was successfully queued. A color-managed handoff must not be built on that assumption.
+
+**Required prerequisite before claiming reliable HDR FD handoff:** repair or replace the Xtrans FD queue API so allocation/queue failures propagate to the caller, ownership of the FD is unambiguous on failure, and receive-side ancillary-FD queue failures break/fail the connection rather than silently losing descriptors. Add transport tests for successful transfer, queue-allocation failure, send failure, receive failure and cleanup. This is a correctness blocker, not merely a diagnostic improvement.
+
+### XGE confirmation
+
+The current xcb-proto `present.xml` uses `xge="true"` for variable-size notifications and CARD64 fields (with explicit start alignment where needed). The proposed BufferReady/BufferInvalidated/StreamError events can therefore use ordinary XGE event declarations; no special eventstruct is required. Their exact event fields and alignment still need generator validation.
+
+No source code or tests were changed. No transport patch or implementation was authorized.
