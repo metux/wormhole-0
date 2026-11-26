@@ -311,3 +311,15 @@ A further read of `hw/xfree86/drivers/video/modesetting/driver.c` at Xserver HEA
 - modesetting `CloseScreen()` frees BOs and may destroy GBM before chaining to the wrapped screen close path. The provider must quiesce and unregister core callbacks before those resources are destroyed; `FreeScreen()` later frees the modesetting record. The loaded Glamor module must remain pinned while callbacks can reach its function pointers.
 
 Specification section 30.9 records these concrete lifecycle constraints (follow-up spec commit `02770890c38c71304c04330e7cf08f79478af6c6`). No source code was changed.
+
+
+### Owner clarification — paired modesetting / Glamor deployment
+
+The owner confirms that the modesetting DDX and Glamor module are always built and deployed together from the same codebase. This removes the need to treat their internal HDR helper interface as an independently versioned optional module ABI.
+
+Updated design in HDR specification section 30 (commit `49303af27f6e059caebfce1c36da15769a1f963b`):
+- modesetting may resolve required internal HDR helper symbols from its paired Glamor module through the existing module loader; missing symbols indicate a broken/mismatched installation, not an ordinary runtime HDR-unavailable condition;
+- no optional-symbol compatibility shim is needed between the paired components;
+- HDR itself remains runtime-optional: failed FP16/shader/export/synchronization/hardware probes simply leave HDR unregistered for that screen;
+- core remains independent of Glamor, and NVIDIA remains on the legacy SDR path unless it explicitly implements a provider;
+- callback/resource teardown ordering remains mandatory.
