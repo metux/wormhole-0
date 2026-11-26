@@ -17,10 +17,11 @@ the ship as `working`. Progress and completion are recorded through the
 existing task lifecycle commands. A ship that cannot or will not accept the
 assignment must communicate that rather than appearing to work on it.
 
-Plugin startup, session recreation, model-activity telemetry, and heartbeats
-must not infer or overwrite task association or board status. They refresh
-process/model liveness metadata only and preserve an existing status/task
-record; a new ship with no prior record defaults to `idle`. Task status is
+Plugin startup, `comms init`, session recreation, model-activity telemetry,
+and heartbeats must not infer or overwrite task association or board status.
+They refresh process/model liveness metadata only and preserve an existing
+status/task/note record; a new ship with no prior record defaults to `idle`.
+Stale or previously offline records may return to `idle`. Task status is
 changed only by explicit task lifecycle operations or explicit Comms status
 commands.
 
