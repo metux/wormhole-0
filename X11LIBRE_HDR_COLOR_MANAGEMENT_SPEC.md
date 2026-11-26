@@ -2047,3 +2047,34 @@ currently rejects `MSG_CTRUNC`; it does not solve request-scoped marker
 association or the separate `appendFd()` allocation-failure path.
 
 No Xserver implementation or protocol XML is authorized by this correction.
+
+## 30.23 — DRI3 compatibility review: FIFO FD association, not byte offsets
+
+The existing DRI3 path materially changes the implementation recommendation in sections 30.20–30.21. Do not treat exact byte-offset recovery as a prerequisite for all FD passing, and do not replace the established Xtrans FIFO mechanism for legacy callers.
+
+### What already works
+
+Current Xserver master `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89` uses a connection-wide FIFO in `os/Xtranssock.c`:
+
+- `_XSERVTransSocketRead()` receives ancillary data with `recvmsg()` and appends each received descriptor to `recv_fds`.
+- DRI3 request handlers call `SetReqFds(client, N)` and then consume exactly the expected number of descriptors through `ReadFdFromClient()`. Examples include `proc_dri3_pixmap_from_buffer()`, `proc_dri3_pixmap_from_buffers()`, and `proc_dri3_fence_from_fd()`.
+- For replies, DRI3 calls `WriteFdToClient()` immediately before emitting the corresponding reply. Xtrans queues the descriptor(s), then attaches the queued FIFO to the next socket write via `sendmsg()`.
+
+This explains why the absence of an ancillary byte offset in a batched `recvmsg()` does not by itself break DRI3: the receiver consumes descriptors in stream/protocol order when it reaches a request that declares FDs. The protocol's per-request FD count and the ordered request/reply flow provide the association used by the established implementation.
+
+### Limits and remaining risks
+
+This is an established compatibility contract, not proof that every malformed or adversarial sequence is validated exactly:
+
+- `ClientRec.req_fds` is an expected-to-consume counter, not a count of the descriptors received for that request. `SetReqFds()` currently logs a mismatch and overwrites the counter.
+- Xtrans stores individual descriptors in a flat FIFO; it does not retain ancillary group boundaries or request offsets. A receive-side allocation failure currently closes the descriptor but does not fail the read.
+- `appendFd()` returns void. On send queue allocation failure it closes the FD, while `_XSERVTransSocketSendFd()` still reports success. This violates the useful success/failure contract expected by callers.
+- The server output path queues FDs before writing the reply. The normal `WriteToClient()` path flushes output, but if a previous flush left buffered bytes after EAGAIN, a later FD-bearing reply may share that pending output buffer. This needs a targeted backpressure test before claiming the legacy reply ordering is fully robust.
+
+### Revised HDR direction
+
+HDR should initially follow the same proven DRI3-style ordered FIFO model: declare the exact FD count in each request/reply, queue descriptors in order, consume them only from the corresponding handler, and preserve the existing `ReadFdFromClient()` / `WriteFdToClient()` behavior for legacy users.
+
+Do not require per-byte marker offsets or introduce a second transport API unless a concrete HDR use case demonstrates that FIFO ordering is insufficient. Do add regression coverage for multiple adjacent FD-bearing requests, ordinary requests between them, read-ahead, mismatched counts, unexpected extra groups, and output backpressure. Keep any generic Xtrans hardening additive and compatibility-tested.
+
+Sections 30.20–30.21 are superseded where they prescribe exact receive marker offsets as a universal requirement or propose replacing the legacy FIFO API. Section 30.22 remains correct only in its narrow statement that a coalesced `recvmsg()` byte count does not reveal the marker's exact byte offset.
