@@ -538,3 +538,11 @@ All four replacement PRs are draft, each contains exactly one commit, and CI was
 - Rebasing stacked #4232 onto corrected #4231 head produced current #4232 head b8febd859ebffb83e5a1964d411eaafb92bf008b, parent 60a22b75864952817bd1589deac81571574ce5a7; exact-head run 45904977771 is pending. Its base branch remains #4231.
 - Intermediate #4231 heads d515dc6... and a30fba0..., and #4232 heads f3c106b... and a268eff.../eefed71..., are superseded; do not cite their CI as current-head validation.
 - Both PR descriptions were updated with the FreeBSD failure/fix and current run IDs. No PR merged. Await exact-head CI before further merge recommendations.
+
+## Follow-up: allocation-test include portability and queued CI (2026-11-26 22:35Z)
+
+- A second portability review found the same unconditional NULL sentinel pattern in test/xtrans-fd-alloc.c: stddef.h had been guarded by LDWRAP_TESTS. Moved stddef.h to the unconditional includes, so non-Linux or no-linker-wrap builds also have NULL defined.
+- Latest #4232 head is now e82644d98e58ade396950172ddbd341463ac6f16, parent #4231 current head 60a22b75864952817bd1589deac81571574ce5a7. Exact-head CI run 45905193967 exists but is still pending with no jobs published yet.
+- #4231 remains at 60a22b75864952817bd1589deac81571574ce5a7; exact-head CI run 45904923410 is still pending with no jobs published yet.
+- PR #4232 body and tracker should cite e82644d..., not superseded b8febd...
+- No further code changes until current runs start; no PR merged.
