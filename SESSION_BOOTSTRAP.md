@@ -241,3 +241,27 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - Current `master` implementation dynamically scans embedded `.ts`/`.mjs` assets in `verifyOpencodePlugins`; the current focused test `TestFixOpencodePluginsInstallsModuleAssets` still hard-codes helper names. The plugin entry point imports three helpers (`session-resolution.mjs`, `inbox-response.mjs`, `runtime-identity.mjs`), while that test currently lists only two. This is a concrete coverage gap; the discovery-driven parity test should replace the manually maintained helper-name slice.
 - The source/embedded/installed comparison must distinguish runtime assets from build/test/config files intentionally present under the source directory. New runtime extensions must not silently fall through as non-runtime.
 - This is a planned acceptance criterion only; no implementation or CI run has been performed for it yet.
+
+
+## Starfleetctl continuation — PR #29 merged, plugin parity PR #31, event-pipeline replacement PR #32 — 2026-11-26 12:05Z
+
+- **PR #29 merged:** [#29](https://github.com/mpbt-hq/starfleetctl/pull/29) merged at `6e693d1d14299763911783beb68b6a9d39a303f5` (2026-11-26T11:55:36Z). Repository only permits rebase merges; merge used rebase with expected head `a7945d5800ef245c2faf98bb41e0d661effb8003`. Exact-head CI `45804837499` passed. Master is now `6e693d1d14299763911783beb68b6a9d39a303f5`.
+- **Plugin bootstrap parity:** [PR #31](https://github.com/mpbt-hq/starfleetctl/pull/31), branch `test/bootstrap-plugin-asset-parity`, head `57308d2be1ac9c58fd3b1a5522062e8f77b85b1b`, open/ready for review/not merged. Exact-head Actions run `45815535581` completed successfully: plugin-typecheck and Go build/vet/full tests on Go 1.22.x and stable.
+  - Recursively discovers runtime assets under `fragments/opencode-plugins/`, compares canonical source, embedded FS, and the complete fresh bootstrap installation; verifies byte identity and entry-point registration/helper non-registration.
+  - The installed directory is compared as a complete file set, so non-runtime test/config/declaration files cannot leak into it.
+  - Negative tests cover missing installed helper, unregistered entry point, missing/unexpected set entries, and unclassified extensions.
+  - Replaced the manually maintained helper-name list with discovery.
+  - Found/fixed a real bug: bootstrap previously treated colocated `.test.ts` and `.test.mjs` as runtime plugins, installing/registering tests. Runtime classification now excludes those.
+  - Issue #30 has a comment linking PR #31 and its exact CI evidence. PR #31 has not been merged.
+- **Event pipeline replacement:** [PR #32](https://github.com/mpbt-hq/starfleetctl/pull/32), branch `feat/comms-event-pipeline-rebased`, head `148f28e2e24d81b9528640217823c63bedda1723`, open/Draft. Based on master `6e693d1...`, ahead 7 / behind 0, 14 changed files. It preserves the six semantic commits from old PR #25 as the second parent of a replacement merge commit; old published branch was not force-pushed or rewritten.
+  - Reconciled the two overlapping plugin files with PR #29: no Dashboard-Topic auto-adoption/currentTask cache, heartbeat is liveness-only, startup init precedes PID/liveness refresh, and inferred `working` writes were removed.
+  - Removed obsolete regex-only tests expecting auto-adoption; carries forward PR #29's task-marker test and its invocation from `scripts/check-opencode-plugin.sh`; all other non-overlapping PR #29 changes are included from master.
+  - Exact-head Actions run `45815962061` was in progress at checkpoint; plugin-typecheck and Go 1.22.x jobs had passed, stable Go tests were still running. No local tests were run. Keep Draft pending full green CI and detailed review.
+- Old PR #25 remains open until PR #32's exact-head CI is fully verified, then close it as superseded and cross-link. No merge of #32 authorized.
+- Branch inventory after PR #29:
+  - `feat/comms-event-pipeline-clean-history` remains old PR #25 head `30b8b3dc2f3d4f3e1a2609a63bd11f1a6995056f`; preserved, not force-pushed.
+  - `feat/comms-event-lifecycle` and `feat/comms-event-pipeline` both remain at `d161b1b81292d11c5f375684db05df1d59c7f9e1`, same superseded PR #23 implementation tree, 84 commits ahead / 1 behind master, with no unique lifecycle implementation. Do not treat either as an independent lifecycle implementation or blindly rebase it. Issue #24 remains open; create the active lifecycle branch from the resulting master after PR #32 is merged.
+  - `backup/master-2026-11-07` remains historical at `0765d18a3c17acc34fbf10b045edfbc7f26d8a3b`, 64 commits behind and zero ahead; do not rebase or modify.
+- Issue #24 has been updated with the dependency replacement and branch inventory. Its durable lifecycle/correlated-turn implementation has not started.
+- Owner's standing plugin invariant remains mandatory: every new plugin runtime/helper file must be discovered by bootstrap packaging and the source/embed/install parity tests in the same change.
+- No local worktree, local test run, ship restart, or force-push. No XAverius/Xserver work was touched.
