@@ -411,3 +411,9 @@ Spec section 30.15 proposes v1 support for ordinary ScreenRec and RandR multi-ou
 Spec section 30.16 adds a field-level request/reply/event matrix for QueryVersion, QueryCapabilities, AcquireCompositor, ReleaseCompositor, SubscribeWindow, UnsubscribeWindow, AcquireBuffer and ReleaseBuffer. It distinguishes ordinary frame races (`NOT_READY`, `STALE`, `UNSUPPORTED`) from X protocol errors, defines BufferReady/BufferInvalidated/StreamError events and states lease/generation invariants.
 
 The matrix is not a wire ABI. Exact field widths, opcodes, xcb-proto XML, extension error mapping and generated-binding tests remain open. No Xserver implementation.
+
+### 2026-11-26 — XCB protocol-schema mapping
+
+The provisional Composite color-managed handoff was mapped against xcb-proto master commit `c70aba5cc6ae87757111dac737fc814b3605f0d4` and DRI3 XML. xcb-proto supports single FD fields and counted FD lists in requests/replies; reply FD count belongs in the first reply data byte (`nfd`). libxcb generated reply-FD handling and `xcb_send_request_with_fds()` were previously verified at `aa7f3256060451ad65a38feeccf792f44181a4e0`.
+
+The new section 30.17 proposes a client-owned per-screen CMCONTEXT resource/epoch, manual-Composite-redirect authorization, AcquireBuffer replies with object FDs followed by producer fence, and ReleaseBuffer counted FD lists (one release fence or zero for NO_USE). Full correlation events need XGE rather than a fixed 32-byte event. FD-less transports must report unsupported. Exact XML, layout/alignment, XGE subscription, Xtrans behavior and generated-binding round-trip tests remain open. No XML or Xserver code changed; implementation remains unauthorized.
