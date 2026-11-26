@@ -466,7 +466,7 @@ Opened draft [X11Libre/xserver PR #4232](https://github.com/X11Libre/xserver/pul
 - Send-side queueing propagates the failure, leaving FD ownership with the caller.
 - Receive-side allocation failure closes the failed and remaining descriptors from the current ancillary message plus all descriptors already queued on that connection, then fails the read with `ENOMEM`.
 - Added Linux tests through the actual Xtrans local transport API. Linker-wrapped `malloc()` injects failure in send queueing and partway through a multi-FD receive; tests check caller ownership, exact FD cleanup and empty FIFO.
-- CI had not started/returned at the last exact-head check; combined status was empty. No local build/test run is claimed. PR remains draft and requires code/CI review.
+- Exact-head workflow run `45881893934` is active. At the latest check several platform build jobs were still queued/in progress; `Check Signed-Off-By` failed with `Resource not accessible by integration`, the same GitHub integration error seen on #4230/#4231. No local build/test run is claimed. PR remains draft and requires all build/test jobs to finish plus code review.
 - PR #4232 touches `os/Xtranssock.c`, also modified by #4231. Coordinate merge/rebase order; neither PR is considered merge-ready until exact-head CI and review pass.
 
 This PR hardens the established DRI3-compatible FIFO; it does not introduce byte-offset association or change the public Xtrans API.
