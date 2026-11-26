@@ -147,7 +147,7 @@ Further lifecycle finding from the 2026-11-26 source review:
 The detailed analysis is recorded in section 16.1 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md` (latest follow-up commit `2cd6b5781e61594cea9a99750eea87341e16fc3f`). No Xserver source was changed.
 
 
-Composite protocol lifetime and format implications were then added to section 16.2 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md` (commit `a9aab868e0189293b0de5cbffbdbcebf38e03a46`):
+Composite protocol lifetime and format implications were then added to section 16.2 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md` (latest spec commit `2fb2742dada488450adf79d78a31a4f1d42a9c94`):
 
 - CompositeNameWindowPixmap names a reference to the current off-screen storage. A new pixmap is allocated when a window is mapped or resized; the old named pixmap remains allocated until freed. Compositors must reacquire the current pixmap after those lifecycle changes.
 - A transformed buffer therefore needs a generation/lifetime corresponding to redirected-window storage. Old transformed generations must remain valid while held by compositor references.
