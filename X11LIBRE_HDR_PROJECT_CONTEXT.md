@@ -470,3 +470,14 @@ Opened draft [X11Libre/xserver PR #4232](https://github.com/X11Libre/xserver/pul
 - PR #4232 touches `os/Xtranssock.c`, also modified by #4231. Coordinate merge/rebase order; neither PR is considered merge-ready until exact-head CI and review pass.
 
 This PR hardens the established DRI3-compatible FIFO; it does not introduce byte-offset association or change the public Xtrans API.
+
+
+## 2026-11-26 — Signed-Off-By workflow permission diagnosis
+
+Inspection of the failed `Check Signed-Off-By` job logs and the action source clarified the failure on Xserver PRs #4230, #4231 and #4232:
+
+- The action successfully fetched and enumerated the PR commits, then raised `Resource not accessible by integration`.
+- Its source calls `pulls.get()` and `pulls.listCommits()`, and when unsigned commits are found it calls `issues.createComment()`. The workflow currently grants only workflow-level `contents: write`; the sign-off job lacks permission to post a PR comment.
+- Opened draft [PR #4233](https://github.com/X11Libre/xserver/pull/4233), branch `ci/fix-signoff-action-permissions`, head `34444903c2caa2d29e5f576973793109c4b0258b`. It grants `pull-requests: write` only to the sign-off job, enabling the action's required PR API/comment access without widening build-job permissions.
+- Exact-head workflow run `45882365691` was queued at the last check. This PR itself is unsigned and should cause the action to report a DCO violation once comment permission works; that is expected and does not waive DCO.
+- Important: the existing sign-off failures are not merely harmless infrastructure noise. The action logs indicate it found at least one unsigned commit and then could not post its explanatory comment. After #4233 is validated, rerun checks on #4230–#4232 and add valid `Signed-off-by` trailers where missing. Do not merge until the actual DCO check passes.
