@@ -445,3 +445,14 @@ Current Xserver master at refresh: `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`.
 - The #4230 read-ahead test proves that a single `recvmsg()` can return ordinary bytes preceding an FD-bearing `sendmsg()` together with the entire FD-bearing payload. Consequently the section 30.20 formula `read_offset + nbytes - 1` is invalid: it points at the last returned byte, not necessarily the first byte of the FD-bearing request. Corrected the design draft in section 30.22; no replacement marker-association algorithm is approved yet.
 - Independent follow-up finding: `appendFd()` in `os/Xtranssock.c` returns void and silently drops a descriptor on allocation failure (with a TODO to mark the connection broken). The receive loop ignores this failure and can leave a partial FD queue; the send path also reports success. This is a separate fail-closed/error-propagation gap not addressed by #4231. Needs a scoped design and regression test before implementation.
 - No HDR rendering or extension implementation was started. No protocol XML or wire ABI was frozen.
+
+## 2026-11-26 — DRI3 FD-passing compatibility review
+
+Owner correctly noted that DRI has used FD passing successfully for years. Audited current Xserver master `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`:
+
+- DRI3 uses the established connection-wide FIFO: Xtrans `recvmsg()` appends received descriptors; DRI3 calls `SetReqFds(N)` and consumes them in order with `ReadFdFromClient()`. Examples: `proc_dri3_pixmap_from_buffer()`, `proc_dri3_pixmap_from_buffers()`, `proc_dri3_fence_from_fd()`.
+- Server replies call `WriteFdToClient()` immediately before `X_SEND_REPLY_SIMPLE()`. Xtrans queues FDs and attaches them to the next socket write using `sendmsg()`.
+- Therefore the lack of an exact byte offset in a batched `recvmsg()` does not itself invalidate DRI3. Its association is FIFO/protocol-order based. Exact marker offsets should not be made a universal prerequisite for HDR, and a replacement transport API is not justified absent a concrete need.
+- Limits remain: `SetReqFds()` only logs mismatches and overwrites the expected-to-consume counter; Xtrans does not retain ancillary group boundaries; `appendFd()` silently closes on allocation failure and its callers still report success. Also test output ordering if an earlier flush leaves bytes buffered after EAGAIN before a later FD-bearing reply.
+- Revised HDR spec section 30.23: preserve legacy FIFO API, use explicit per-message FD counts and ordered consumption, harden allocation/truncation/error handling additively, and add tests for read-ahead, multiple FD-bearing requests, interleaved ordinary requests, count mismatches/extras, and output backpressure. Sections 30.20–30.21 are superseded where they require exact offsets universally or propose replacing the FIFO.
+- No Xserver implementation or protocol XML was changed.
