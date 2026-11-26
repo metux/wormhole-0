@@ -156,3 +156,21 @@ Composite protocol lifetime and format implications were then added to section 1
 - Legacy Composite semantics should remain unchanged unless the compositor explicitly negotiates the color-managed handoff.
 
 The external Composite API documentation and protocol text were consulted; this is design evidence, not yet a full audit of all compositor implementations. No implementation changes were made.
+
+
+## 2026-11-26 — Visual, buffer-format and Color Description model
+
+The design draft was extended in sections 18–23 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md` (commit `7157c7360b4200db468304bea0fb07853c5f7ab5`).
+
+Current proposal, still awaiting explicit owner approval:
+
+- Do **not** add a private seventh core Visual class for HDR. Keep standard core Visual classes (normally TrueColor) and expose versioned extended-Visual capability/profile attributes through the new color-management extension.
+- A Visual selects a compatible window/drawable configuration; it does not define the buffer's storage format or its colorimetry.
+- Packed 10:10:10:2 may use a conventional depth-30 / 32-bpp path where supported. Client-visible RGBA FP16 is a 64-bpp format and should initially use an extension-managed buffer/surface path, not pretend to be an ordinary core pixmap depth.
+- Buffer format descriptors define channel order, component type/width, planes, strides/modifiers, alpha representation and synchronization. They do not define primaries or transfer functions.
+- Colorimetry is represented by an immutable, versioned Color Description resource (primaries, white point, transfer function, reference white and luminance semantics), initially bound to a Window. Dynamic metadata belongs atomically to the corresponding buffer/Present frame.
+- For a negotiated color-managed Composite path, the X server transforms every window—including legacy SDR windows under an explicitly chosen legacy profile—into one common linear-light working space before the compositor sees it. A legacy compositor keeps the old Composite behavior.
+- The extension surface is conceptual only; no wire ABI, opcode, extension name, exact working space, transfer-function policy or legacy SDR profile has been approved.
+- No Xserver implementation changes were made. Sections 18–23 are proposals and do not authorize implementation.
+
+Owner decisions are enumerated in section 23 of the specification.
