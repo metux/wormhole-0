@@ -369,3 +369,17 @@ Key proposed rules:
 - Provider API needs separate release-fence ordering, reusable-pool return, terminal destruction, and provider quiesce operations. The old illustrative single `release_buffer()` callback is not sufficient.
 
 No Xserver source code was changed. The new state machine is a proposal pending owner review; implementation remains unauthorized.
+
+
+## 2026-11-26 — Provider API and compositor FD handoff proposal
+
+Xserver master was refreshed to d96a26a11ca6ddc53050f4a96dd0becee9858077. Source checks of Xext/composite/compext.c, Xext/dri3/dri3_request.c and os/io.c confirmed:
+- CompositeNameWindowPixmap registers a reference to the exact current PixmapPtr; NameWindowPixmap does not replace the pixmap resource returned to the compositor.
+- DRI3 rejects non-local clients and uses SetReqFds()/ReadFdFromClient() for incoming FDs and WriteFdToClient() for reply FDs. The helpers rely on XTRANS_SEND_FDS and otherwise fail.
+- DRI3 imports buffers as ordinary X pixmaps and is not an appropriate color-semantics or FP16 buffer API. The new path must not require DRI3/libdrm in generic DIX.
+
+Spec section 30.12 now proposes a separate versioned color-management extension and a two-phase handoff: BufferReady event without FDs, AcquireBuffer request/reply with DMA-BUF plane FDs plus producer fence, and ReleaseBuffer request with a generation-correlated release fence (or explicit NO_USE when no GPU read was submitted). The protocol is a proposal; exact name, wire layout, compositor authority, Xinerama behavior, XCB FD reception, error handling and security policy remain open.
+
+The internal provider proposal now separates begin/collect transform, descriptor/fence export, consumer release-fence import/queue-wait, pool return, terminal destruction and quiesce. Core retains source snapshots and logical generations; modesetting orchestrates; Glamor owns physical buffers and GPU synchronization. No ScreenRec layout changes or mandatory NVIDIA callbacks.
+
+No Xserver source code was changed. No implementation authorization was granted.
