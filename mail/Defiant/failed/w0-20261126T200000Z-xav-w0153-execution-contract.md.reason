@@ -1,0 +1,6 @@
+message: w0-20261126T200000Z-xav-w0153-execution-contract.md
+mailbox: Defiant
+from: new
+failed_at: 2026-11-26T19:00:57Z
+reason: invalid message front matter: yaml: unmarshal errors:
+  line 6: field task_ref not found in type wormhole.Message
