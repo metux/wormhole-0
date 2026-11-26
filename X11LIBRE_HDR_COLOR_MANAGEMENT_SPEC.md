@@ -599,7 +599,7 @@ A buffer format descriptor must describe storage only. At minimum it contains:
 - component widths and offsets, including alpha;
 - plane count, per-plane offsets, strides and modifiers for imported/exported DMA-BUFs;
 - dimensions and any required alignment;
-- alpha representation (straight or premultiplied);
+- alpha-channel presence and component format (in the pixel format); alpha mode (straight, premultiplied in encoded/electrical values, or premultiplied in linear/optical values) is separate per-surface/buffer representation metadata;
 - synchronization/import/export capabilities.
 
 The format identifier is not a color-space identifier. In particular, FP16 does not imply scRGB, and 10:10:10:2 does not imply BT.2020 or PQ.
@@ -625,7 +625,7 @@ The object should identify:
 - minimum, nominal/reference and peak luminance semantics where relevant;
 - optional static content/mastering metadata, with field-specific units and validation;
 - rendering intent / gamut mapping preference, if supported;
-- alpha semantics only where not already fixed by the buffer format.
+- alpha mode as separate representation metadata, not inferred from the pixel format.
 
 ICC profile support, if added, must be separately versioned and specify maximum profile size, validation, caching, canonical identity and lifetime. It must not be an unbounded arbitrary blob.
 
@@ -706,3 +706,95 @@ The extension should be split internally into independent capability groups so a
 7. **Transfer-function scope:** select which transfer functions are mandatory in v1 (sRGB/linear/PQ/HLG) and define their luminance semantics?
 
 All proposals in sections 18–23 remain draft until the owner explicitly approves them. No Xserver implementation is authorized by this document.
+
+
+## 24. Common linear working space (proposal; owner approval pending)
+
+### 24.1 Recommended v1 definition
+
+**Recommendation:** define one fixed, output-independent, absolute-linear RGB working space for the color-managed Composite handoff:
+
+| Property | Proposed v1 value |
+|---|---|
+| Working-space primaries | ITU-R BT.2020 / Rec.2020 |
+| Red primary | CIE 1931 x=0.708, y=0.292 |
+| Green primary | CIE 1931 x=0.170, y=0.797 |
+| Blue primary | CIE 1931 x=0.131, y=0.046 |
+| White point | CIE D65, x=0.3127, y=0.3290 |
+| Transfer function | Linear light (identity between normalized linear values and light) |
+| Reference-white scale | R=G=B=1.0 represents D65 white at 203 cd/m² |
+| Nominal luminance equation | Y = 0.2627 R + 0.6780 G + 0.0593 B; multiply Y by 203 cd/m² for absolute luminance |
+| Compositor handoff format | RGBA IEEE-754 binary16 (FP16), subject to negotiated support |
+| Alpha in handoff | Linear, premultiplied |
+| Output dependency | None; do not scale or clamp this space according to any connected display |
+
+The space is referred to descriptively as **Xlibre Linear BT.2020 / 203** in this draft. This is a proposed Xlibre working-space profile name, not a standards body registration or wire identifier.
+
+### 24.2 Why this choice
+
+- BT.2020 provides a wide, standardized RGB primary set and D65 white point that align directly with the BT.2100 HDR ecosystem.
+- Linear light makes alpha blending and spatial composition well-defined; encoded PQ, HLG or sRGB values must never be blended directly.
+- A fixed 203 cd/m² reference scale makes the working values independent of the current output device. It is a canonical scale, not a statement that every display's diffuse/reference white must physically be 203 cd/m².
+- 203 cd/m² is used as HDR reference white in common BT.2100 production guidance for a 1 000 cd/m² reference display. ITU-R BT.2408 also documents that operational HDR reference-white levels can vary with nominal peak display luminance. Xlibre deliberately chooses a fixed internal scale instead of inheriting a display-dependent production target; output mapping handles the difference.
+- Rec.2020 is preferred over ACEScg for this system compositor contract because BT.2020/D65 is directly aligned with common HDR display signaling. ACEScg remains a valid client/source color space and must be transformable into the working space; it is not the compositor handoff space in v1.
+
+### 24.3 Numeric range and FP16 behavior
+
+The nominal RGB value 1.0 is reference white, **not a maximum**.
+
+- Values above 1.0 are valid and represent highlights above reference white. For example, neutral RGB 4.0 represents 812 cd/m².
+- Negative RGB components are valid intermediate values and may be produced by conversion of colors outside the Rec.2020 primary triangle or by color transforms. They must not be clipped merely because they are negative.
+- Gamut mapping and clipping are not performed during source-to-working-space conversion. They belong to the later output transform.
+- The implementation must not silently clamp working RGB to [0, 1].
+- The source-to-working transform must preserve finite values as accurately as the selected buffer precision allows. Non-finite FP inputs (NaN and infinities) must not be allowed to poison compositor blending; the exact sanitization/error policy remains OPEN.
+- FP16's finite numeric range is ample for the nominal PQ range when scaled by 203 cd/m² (10 000 cd/m² is approximately 49.26 in working-space units). This does not make FP16 the required client source format; it is the proposed compositor-facing intermediate.
+
+### 24.4 Absolute luminance conversion
+
+All source descriptions that are converted into this working space must resolve their signal values to a common absolute-light scale before the final RGB matrix conversion.
+
+For a source description with an explicit reference-white luminance:
+- decode the source transfer function according to its exact definition;
+- resolve its linear values to cd/m² using the source description's luminance/reference-white semantics;
+- chromatically adapt to D65 when the source white point differs, using one protocol-defined adaptation method (method still OPEN);
+- convert source linear tristimulus values to BT.2020 linear RGB;
+- divide by 203 cd/m² to obtain Xlibre Linear BT.2020 / 203 values.
+
+For PQ/ST 2084, the transfer function provides an absolute luminance interpretation and must be decoded accordingly. Do not treat PQ code value 1.0 as the working-space reference white.
+
+For HLG, the transfer function alone is insufficient to determine a unique absolute display luminance mapping in all viewing environments. The protocol must define the required HLG system gamma / nominal peak / viewing assumptions before HLG sources can be advertised as fully supported. Until then, a server must not silently treat HLG as PQ or invent a peak-luminance assumption.
+
+For SDR sources, the Color Description's reference-white luminance determines how encoded SDR white maps into the common working space. The default reference white for legacy unmanaged windows remains a separate owner decision; do not assume that choosing 203 as the working-space scale settles legacy SDR brightness.
+
+### 24.5 Alpha and blending contract
+
+The transformed compositor-facing buffer uses linear-light, premultiplied alpha:
+- alpha is linear and remains in [0, 1];
+- RGB is multiplied by alpha after color conversion into the working space;
+- blending is performed on premultiplied linear RGB and linear alpha;
+- the source buffer's alpha mode must be described independently from its pixel format (e.g. straight, premultiplied in encoded/electrical values, or premultiplied in linear/optical values);
+- nonlinear transfer decoding must not be applied directly to encoded-premultiplied RGB. The transform must correctly unpremultiply where necessary, decode/convert in the correct domain, then premultiply in linear working space;
+- zero-alpha pixels must not leak arbitrary hidden RGB into the transformed result.
+
+The pixel format states whether an alpha channel exists and how it is stored. The alpha mode is independent representation metadata, as demonstrated by the separate color-representation model in Wayland.
+
+### 24.6 Consequences and limits
+
+- Windows spanning multiple outputs receive the same transformed values; no monitor-specific transform is baked into their per-window buffers.
+- Moving a window between outputs does not require reinterpreting or regenerating the source-to-working-space transform solely because the output changed. The final output transform may change.
+- The compositor can blend transformed windows consistently, but remains responsible for spatial composition, effects and final output composition.
+- The output stage maps this common working space to each output's actual color volume, luminance range, transfer function and supported KMS signaling. It may tone-map or gamut-map there.
+- A compositor that has not negotiated the color-managed handoff continues to use the unchanged legacy Composite path.
+
+### 24.7 Owner decisions still required
+
+1. Approve or change the BT.2020/D65 primaries and white point.
+2. Approve the fixed 203 cd/m² reference-white scale, explicitly independent of output peak.
+3. Approve RGBA FP16 as the v1 transformed compositor handoff format, with capability negotiation and a defined fallback when unavailable.
+4. Approve linear premultiplied alpha as the compositor-facing contract.
+5. Select the chromatic-adaptation method.
+6. Define HLG system-gamma / nominal-peak interpretation before advertising HLG support.
+7. Define the default absolute reference white for legacy SDR windows.
+8. Define the policy for NaN/infinity values in client-provided floating-point buffers.
+
+Section 24 is a design recommendation, not yet an owner-approved normative ABI. No Xserver implementation is authorized by this section.
