@@ -268,3 +268,6 @@ Verified observations:
 The proprietary NVIDIA DDX is external to this repository and was not inspected or tested. Its compatibility is a mandatory future validation target, not a verified fact. Detailed findings and test gates: spec section 28. Durable owner requirement: `decisions/2026-11-26--hdr-driver-compatibility-and-nvidia.md`.
 
 No Xserver implementation changes were made. No implementation authorization follows from this audit.
+
+
+Further source audit detail (same Xserver master HEAD `bb06f6ddca766c41c81494ae228c11e53df59590`): the normal modesetting screen pixmap is backed by a shared `front_bo`; CRTC scanout normally uses its own source origin, while PRIME paths may select per-CRTC scanout pixmaps. KMS gamma-LUT/CTM properties are CRTC-scoped, so cloned connectors on one CRTC share that state; per-connector distinct pixel transforms cannot be assumed. Cursor planes and cursor DRM operations are separate from primary-plane pixels. Present format/modifier checks require support across all enabled CRTCs, so a new FP16 screen-pixmap requirement could regress existing flips or initialization. See spec section 28.7.
