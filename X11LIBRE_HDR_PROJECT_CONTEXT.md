@@ -383,3 +383,11 @@ Spec section 30.12 now proposes a separate versioned color-management extension 
 The internal provider proposal now separates begin/collect transform, descriptor/fence export, consumer release-fence import/queue-wait, pool return, terminal destruction and quiesce. Core retains source snapshots and logical generations; modesetting orchestrates; Glamor owns physical buffers and GPU synchronization. No ScreenRec layout changes or mandatory NVIDIA callbacks.
 
 No Xserver source code was changed. No implementation authorization was granted.
+
+## 2026-11-26 — XCB FD transport verification
+
+X11Libre/mirror.fdo.libxcb master was inspected at `aa7f3256060451ad65a38feeccf792f44181a4e0`. `xcb_out.c` implements request FD passing with `xcb_send_request_with_fds()`; `xcb_in.c` associates reply FDs only for pending requests marked `XCB_REQUEST_REPLY_FDS`, reads the FD count from reply `pad0`, and appends descriptors after the reply payload. `xcb_get_reply_fds()` locates the array. `c_client.py` generates the request flag and reply accessor automatically when xcb-proto declares `<fd>` fields. Received FDs are caller-owned and must be closed before freeing the reply; outgoing FDs are transferred to XCB ownership.
+
+The current implementation sets `XCB_MAX_PASS_FD` to 16, but this is an implementation limit, not a wire ABI. FD passing is conditional on `HAVE_SENDMSG`. Proposed v1 cap: up to four DMA-BUF object FDs plus one producer fence in AcquireBuffer; one release-fence FD or zero for NO_USE. The extension must ship protocol XML and generated bindings; raw requests without the reply-FD flag are unsafe. Client-side FD support is a build prerequisite that the server cannot infer from its own QueryCapabilities response.
+
+Spec section 30.13 records these details. The concrete XML schema, runtime transport matrix and compositor interoperability remain unverified. No Xserver code changes.
