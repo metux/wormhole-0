@@ -174,3 +174,22 @@ Current proposal, still awaiting explicit owner approval:
 - No Xserver implementation changes were made. Sections 18–23 are proposals and do not authorize implementation.
 
 Owner decisions are enumerated in section 23 of the specification.
+
+
+## 2026-11-26 — Common linear HDR working-space proposal
+
+HDR specification section 24 was added in commit `0b5d37730544a05752e696d3616b0f7993f4b6e3`. This is a technical recommendation awaiting explicit owner approval, not a frozen normative ABI.
+
+Recommended compositor-facing space:
+- BT.2020 / Rec.2020 primaries (R .708/.292, G .170/.797, B .131/.046), D65 white (.3127/.3290).
+- Linear-light RGB, absolute luminance scale with neutral RGB 1.0 = 203 cd/m².
+- Output-independent; do not normalize to current monitor peak.
+- RGBA IEEE-754 binary16 (FP16) transformed handoff, subject to negotiated support.
+- Values above 1.0 and negative RGB intermediates are valid; no source-stage clamp to [0,1] and no gamut mapping until output conversion.
+- Transformed handoff uses linear premultiplied alpha; alpha mode on source buffers is separate metadata from pixel format.
+- PQ must be decoded to absolute luminance. HLG cannot be advertised as fully supported until system gamma / nominal peak assumptions are specified.
+- Legacy SDR reference white, chromatic adaptation method and non-finite FP input policy remain open.
+
+Rationale: BT.2020/D65 aligns with BT.2100 HDR signaling; a fixed 203 cd/m² scale keeps per-window transforms independent of monitor/output. ITU-R BT.2408 notes reference-white practice can vary with display peak; Xlibre's proposal intentionally uses 203 as an internal canonical scale, not a universal output-white setting.
+
+No Xserver source was changed. No implementation authorization follows from this proposal.
