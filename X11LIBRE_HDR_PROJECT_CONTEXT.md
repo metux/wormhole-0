@@ -206,3 +206,10 @@ The owner approved the following design direction in the dedicated HDR session; 
 - A session value of 203 cd/m² is a valid user/session choice for HDR-desktop graphics white. At the default 80 cd/m², legacy sRGB white maps to working RGB approximately 0.3941; at 203 cd/m² it maps to 1.0.
 
 Configuration interface and allowed range remain open. If runtime changes are supported, every affected legacy window must be fully retransformed into a new synchronized buffer generation before publication. No Xserver implementation was authorized or changed.
+
+
+### 2026-11-26 correction — legacy SDR default in HDR composition
+
+A standards cross-check refined the default recorded above: the HDR color-managed compositor path should default legacy SDR white to **203 cd/m²**, not 80 cd/m². The W3C CSS Color HDR draft states that SDR content should be anchored to 203 cd/m² HDR reference white when composited with HDR. The conventional 80 cd/m² sRGB reference-viewing value remains a valid configurable lower setting, as does 100 cd/m².
+
+Thus the session-wide `LegacySDRReferenceWhite` default is 203 cd/m²; it is configurable (e.g. 80 or 100 cd/m²), never per-output. The implicit profile remains sRGB/D65. Explicit Color Descriptions override the legacy default. See spec section 25.5 for the distinction between SDR reference-display viewing and HDR composition.
