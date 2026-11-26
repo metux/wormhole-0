@@ -1514,3 +1514,79 @@ Section 30.3's illustrative table must be extended/reworked before implementatio
 Do not combine compositor release with physical destruction in one ambiguous `release_buffer()` callback. A release makes an allocation reusable only after the release dependency is imported and ordered; destruction is a separate terminal operation. Core must never inspect or own EGL/GBM handles or fence implementation details.
 
 No Xserver source code has been changed. No implementation authorization is implied by this lifecycle proposal.
+
+
+### 30.12 Proposed provider API and two-phase Composite handoff
+
+This subsection makes the internal provider boundary and the compositor transport more concrete. It is a design proposal only: names and message shapes below are illustrative, not a frozen C ABI or X wire ABI. No Xserver implementation is authorized.
+
+#### Current source evidence
+
+X11Libre/xserver master was refreshed to d96a26a11ca6ddc53050f4a96dd0becee9858077 (xfree86: mark the OutputClass HotplugDriver option as used). The following files were checked at that branch head:
+
+- Xext/composite/compext.c: SingleCompositeNameWindowPixmap obtains the current window pixmap with GetWindowPixmap(), increments its reference, registers that exact PixmapPtr as the client's pixmap resource, then optionally calls Screen->NameWindowPixmap(). The hook does not substitute a different pixmap object in the Composite resource.
+- Xext/dri3/dri3_request.c: DRI3 dispatch rejects non-local clients. FD-bearing requests declare their expected descriptor count with SetReqFds() before ReadFdFromClient(); replies send descriptors with WriteFdToClient(). DRI3 imports DMA-BUFs as ordinary Pixmap resources with depth/bpp and modifier metadata.
+- os/io.c: ReadFdFromClient() and WriteFdToClient() use Xtrans receive/send-FD operations when XTRANS_SEND_FDS is enabled; otherwise they fail. FD numbers are therefore transport-local handles, not wire values.
+- Xext/dri3/meson.build: DRI3 is conditionally built and has a libdrm dependency. The new color contract must not make generic DIX depend on DRI3 or libdrm.
+
+These facts support reusing the existing Xtrans FD-passing mechanism as a transport pattern, but not reusing DRI3 pixmap resources or treating DRI3 synchronization capabilities as proof of the HDR contract.
+
+#### Internal provider API: responsibilities and operations
+
+Keep three ownership layers:
+
+1. DIX/core owns the source snapshot reference, immutable Color Description revision, source sequence, logical content-generation record, compositor lease identity and protocol state. It never owns EGLImage, GBM BO, GL texture/FBO, DRM handle or EGLSync.
+2. The modesetting provider owns the per-screen orchestration and the mapping between logical generations and backend allocations. It registers through the core-owned PRIVATE_SCREEN record and delegates physical GPU work to Glamor's same-build internal helpers.
+3. Glamor owns the opaque physical color buffer, source sampling, FP16 render target, DMA-BUF export and native-fence import/export/wait operations.
+
+The current illustrative XserverColorBackendOpsV1 table in section 30.3 is insufficient because transform submission, completion, export, consumer release, pool reuse and destruction have different lifetimes. Rework it around the following operation groups:
+
+- register/probe: install a copied, versioned operations table in core-owned screen-private storage; report end-to-end capabilities only after real renderability, export/import and both synchronization directions have passed.
+- begin_transform: receive a core-retained source snapshot, immutable source description/revision, dimensions, source sequence and any required source-acquire dependency; allocate or select a private destination and queue the transform. Return an opaque job token without blocking the server event loop.
+- collect_transform: allow core/provider orchestration to collect completion on the server thread. On success, return an opaque buffer token plus a complete export descriptor and producer-fence FD. Do not invoke callbacks into core from an arbitrary GPU worker thread or after provider teardown.
+- export/duplicate: expose the DMA-BUF plane descriptors and producer fence with explicit FD ownership. Core may transport FDs but must not interpret backend objects or synchronization internals.
+- queue_consumer_release: accept the release-fence FD for one exact lease, import it in Glamor and queue the wait in the same serialized GL context/queue that will perform future writes. A successful return means ordering has been established, not that the GPU is idle.
+- return_to_pool: make the physical allocation reusable only after queue_consumer_release succeeded and no other lease/reference remains.
+- destroy_buffer: terminally destroy the physical allocation after server-side work is safe. This is distinct from returning it to the pool.
+- quiesce/unregister: stop new jobs, drain or quarantine in-flight work, prevent new core calls, clear the core-owned callback record and only then allow modesetting/GBM/Glamor teardown.
+
+Core should retain source pixmap and Color Description references until collect_transform confirms that the GPU no longer reads them. Provider job tokens and physical buffer tokens remain opaque. A provider must not retain borrowed pointers beyond the documented operation lifetime unless core has explicitly transferred a reference.
+
+Keep the existing version, struct_size and capability-bit validation model. The table is copied into core-owned PRIVATE_SCREEN storage; no ScreenRec field, DevPrivateType, PRIVATE_LAST value or public third-party DDX callback is added. A missing provider means legacy SDR. Registration or allocation failure must not fail screen initialization.
+
+#### Wire protocol: separate extension and two-phase FD transfer
+
+Do not alter the legacy Composite extension's NameWindowPixmap request or silently change its returned pixmap semantics. Add a separate versioned X extension associated with the compositor/color-management contract. A provisional name such as XlibreColorManagement is only a placeholder; extension name, opcode allocation and protocol source location remain open.
+
+Prefer a two-phase handoff so asynchronous events do not need to carry file descriptors:
+
+1. QueryVersion / QueryCapabilities: negotiate the protocol version and report the complete per-screen handoff capabilities, common working-space identifier, supported buffer formats/modifiers, maximum dimensions/planes and synchronization mode. Do not advertise a feature based only on extension strings or isolated EGL support.
+2. AcquireCompositor / SelectWindows: establish one authorized compositor client for a screen and select the redirected windows whose transformed generations it will consume. The v1 policy should be exclusive per screen; the exact relationship to Composite redirection ownership and the existing compositor-manager selection must be reviewed before freezing.
+3. BufferReady event: notify the compositor that a new immutable generation is available. The event carries only ordinary X protocol data: screen/window identity, connection epoch, monotonically increasing generation, dimensions and a working-space/format profile identifier. It carries no FD. Events may be coalesced; the compositor should acquire the newest generation.
+4. AcquireBuffer request/reply: the compositor requests one specific (screen, window, epoch, generation). The reply describes FourCC, modifier, dimensions, plane count, per-plane stride/offset and producer synchronization. The server transfers plane FDs in a fixed documented order, followed by the producer-fence FD, using Xtrans FD passing associated with the reply. A successful acquisition creates the compositor lease.
+5. ReleaseBuffer request: the compositor identifies the exact screen/window/epoch/generation and returns either one release-fence FD covering all submitted GPU reads, or an explicit NO_USE release with no FD if it submitted no GPU read. No missing release, timeout or connection close is interpreted as completion.
+6. BufferInvalidated / StreamError events: report window destruction/unredirect, capability loss, transform failure or stream shutdown. A newer BufferReady does not revoke a generation already acquired; acquired generations remain leased until their matching release or safe quarantine/teardown.
+
+The exact X wire layout is deliberately not fixed here. In particular, variable-length plane arrays, maximum plane count, FD ordering, request FD-count validation, byte order, padding and error codes require a protocol review and generated-client-library feasibility check.
+
+#### FD transport and publication rules
+
+- V1 should require a local client and a transport with XTRANS_SEND_FDS, matching the existing DRI3 model. If the build or active connection cannot pass FDs, the extension reports the handoff unsupported and keeps legacy Composite behavior. Do not invent a fallback that sends a Pixmap XID for an opaque FP16 buffer.
+- For FD-bearing requests, validate the request flags/count and call SetReqFds() before consuming descriptors. Read exactly the declared number with ReadFdFromClient(); close every received FD on every error path.
+- For replies, send duplicated plane FDs and the producer fence with WriteFdToClient() before the reply body, following the established DRI3 pattern. Document exact order and ownership. The receiving process owns its received descriptors; the server retains its own backend allocation reference.
+- A partial FD send is a failed publication. Do not mark the generation reusable or assume the client received none. Quarantine/destroy the server allocation without reusing its storage; close all FDs still owned by the server and terminate the broken stream/connection as required by the transport's failure semantics.
+- Once an AcquireBuffer reply is successfully published, the buffer is immutable and leased. A generation superseded before acquisition may be discarded; a stale AcquireBuffer must return a defined stale-generation result and let the compositor request the newest generation.
+- Release validation binds the request to the owning compositor client, screen, epoch, window and generation. Reject stale epochs, wrong windows, unknown generations, duplicate releases and mismatched FD counts without decrementing references twice.
+- The compositor must return a release fence covering all GPU queues/contexts that read the buffer. NO_USE is valid only when no GPU read was submitted. A CPU reference drop or client disconnect is not a release fence.
+
+#### Security and lifecycle constraints
+
+Only the authorized compositor client may acquire or release buffers. The server validates window access and ownership before publishing a descriptor; a client-supplied FD or generation number never establishes ownership. The exact authorization rule (exclusive extension claim, Composite redirect owner, compositor-manager selection, or a combination) remains an open security review item.
+
+On compositor disconnect, invalidate the connection epoch and stop new publication. Do not recycle leased allocations. Mark them orphaned/quarantined and drop the server's own references only through a safe backend teardown path; kernel references held by the client/driver may outlive the X connection. A new compositor receives a new epoch, and delayed releases from the old epoch are rejected.
+
+#### Remaining protocol/API gates
+
+Before freezing the ABI, review: extension naming and opcode allocation; compositor authority and Composite redirect integration; multi-screen/Xinerama semantics; Xtrans FD passing and XCB client-library support; max plane count and variable descriptor encoding; stale-event coalescing and backpressure; exact NO_USE semantics; failure behavior after partial FD send; per-window Color Description association; and security/resource access checks. Also verify the selected format/modifier and both native-fence directions with a real compositor.
+
+Source review at d96a26a11ca6ddc53050f4a96dd0becee9858077 confirms the server-side Composite and DRI3 mechanics described above, but does not yet verify client-library FD reception, transport behavior on every local transport, or compositor interoperability. No Xserver source code has been changed. This remains a design proposal and does not authorize implementation.
