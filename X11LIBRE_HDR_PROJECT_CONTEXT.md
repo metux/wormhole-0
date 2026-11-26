@@ -1,0 +1,110 @@
+# X11Libre Xserver HDR Project Context
+
+**Purpose:** durable handoff for a dedicated ChatGPT session working only on HDR / color management in X11Libre. This file is the technical context; refresh live GitHub state before making implementation decisions. It is not an authorization to modify code or to revive historical branches.
+
+**Last verified context refresh:** 2026-11-26 (UTC).  
+**Primary implementation repository:** `X11Libre/xserver`, target branch `master`.  
+**Related workspace notes:** `X11Libre/mpbt-workspace:mtx/agent-config/.starfleet-ai/dashboard/topics/xlibre/hdr-display-support.md`.  
+**Normative authority:** owner decisions and current Xserver source/specifications. This handoff records verified facts and proposals separately.
+
+## Session scope and boundaries
+
+- This context is for HDR/color-management work only.
+- Starfleetctl and XAverius implementation are handled in separate ChatGPT sessions. Do not silently switch into either workstream.
+- The separate HDR session should begin by rereading this file, the current workspace HDR topic, current Xserver `master`, and relevant Xserver skills.
+- No Xserver code changes, local builds, or tests were performed as part of this context capture.
+- Do not claim access to local worktrees or resurrect local-only branches unless their actual commits/patches are recovered.
+- Do not implement the proposed architecture as if it were already approved. Resolve open design decisions with the owner first.
+
+## Verified implementation state (2026-11-26)
+
+- Xserver `master` HEAD observed during the review: `8f47e0e2dd7a9f2dec43acffb2cf0f80b68e5b8e`. Refresh before use.
+- PR [#3216](https://github.com/X11Libre/xserver/pull/3216) merged on 2026-08-24, merge commit `2d72f9e1921a6a0f8d975845c07d7040f6fa8379`.
+- The merged change adds CTA-861-G EDID parsing for Colorimetry (extended tag 5) and HDR Static Metadata (extended tag 6), stores parsed data in `xf86Monitor::hdr`, and adds tests in `test/ddc-tests.c`.
+- `xf86DoInterpretHDRMetadata()` is declared and implemented. The source search at the checkpoint found only its declaration, definition, and test calls from `test/ddc-tests.c`; there was no production call in the normal DDC/modesetting EDID path. The parser is therefore merged but not integrated into normal server operation.
+- No `HDR_OUTPUT_METADATA` property/API implementation was found in the current Xserver source search.
+- Remote `wip/hdr-prep` was at `34ad4284c98c8eb3bf049bc762382effb194a14d`, two commits ahead and 587 behind then-current master. It is stale/diverged; do not use as a current base without reconciliation.
+- Historical `wip/hdr-full` was recorded as local-only on 2026-07-02. No corresponding remote branch was found. Do not assume it can be resumed unless the actual commit/patch is recovered.
+- External PoC [cepelinas9000/xserver:wip/x11hdrV2](https://github.com/cepelinas9000/xserver/tree/wip/x11hdrV2) was at `159a6f484a2a92769787995198f38d80208ec59b` (2026-03-14): one 271-file / +46.5k-line commit against an old base. Its own commit description reports incomplete glamor operation coverage, dark windows and artifacts. Treat as design/source reference only, not a merge candidate.
+
+## Historical PoC: useful material and rejection gates
+
+The old PoC contains relevant design/source material in `glamor/hdrext/`, shader sources, draft wire protocol, modesetting DRM property plumbing, glamor shader refactoring and EDID parsing. It also brings major unresolved issues:
+
+1. It repurposes core protocol opcode 125 for a private visual/depth latch. **Reject this approach.** Use a versioned X extension with explicit capability discovery and request/reply semantics.
+2. It increases `MAXFORMATS` from 8 to 10, explicitly noting an ABI break. Do not accept this as-is.
+3. It raises the minimum OpenGL core profile to 4.6 without a verified hardware requirement. Do not impose this global compatibility regression.
+4. It introduces a mandatory Vulkan-header build dependency. Vulkan must not become a mandatory server build/runtime dependency merely to enable HDR.
+5. Its glamor coverage is incomplete and has reported visual artifacts/dark windows. A partial rendering path must not silently misrender SDR/HDR content.
+6. RandR output switching/support was noted as missing/incomplete.
+7. The historical local-only reconstruction had a missing-braces path in `drmmode_output_get_modes()` that could call `xf86DoInterpretHDRMetadata(mon)` when `mon == NULL`; parser dereferences must be guarded. Treat malformed/short EDID as a first-class negative test.
+8. The PoC's EDID sink-capability data must not be copied directly to the outgoing KMS `HDR_OUTPUT_METADATA` blob; sink capability and final composed-frame metadata are different concepts.
+
+## Design references
+
+- [X11Libre org Discussion #251 — Color Management & HDR](https://github.com/orgs/X11Libre/discussions/251)
+- [X11Libre/misc issue #250](https://github.com/X11Libre/misc/issues/250)
+- [Historical X.Org DeepColor extension RFC](https://groups.google.com/g/xorg-devel/c/JmhOVTpZcs8)
+- [Wayland color-management concepts](https://wayland.freedesktop.org/docs/book/Color.html) — conceptual reference only; do not copy protocol/code.
+- [Linux DRM/KMS documentation](https://docs.kernel.org/gpu/drm-kms.html) — output colorspace, max_bpc and HDR metadata properties.
+
+Keep XLibre's protocol and implementation independent. The historical DeepColor discussion is useful for drawable metadata and compositor capability discovery, but compatibility concerns around a new core visual class remain relevant.
+
+## Unresolved design decisions — owner review required
+
+Do not silently choose defaults for these:
+
+- **Pixel representation:** first target as packed 10-bpc RGB in the existing 32-bit pixel model, or FP16 RGBA as a required first-class client format? Bit depth alone does not define HDR; colorimetry and transfer function are separate.
+- **Metadata scope:** static image description on a window/drawable/pixmap versus dynamic metadata attached to a frame/presentation transaction. Define inheritance, validation, lifetime, update ordering and redraw behavior.
+- **Transfer functions:** define PQ and HLG support, reference/peak luminance semantics, and SDR/scRGB conversion. Prior discussions contain competing preferences; no default is approved.
+- **Mixed-client composition:** define conversion of SDR, wide-gamut SDR and HDR sources into a common blending space, tone mapping and final output metadata selection.
+- **Output policy:** define RandR output colorspace and bit-depth negotiation separately from the KMS `HDR_OUTPUT_METADATA` blob. KMS metadata describes the final composed output, not the monitor's EDID capabilities.
+- **Legacy compatibility:** preserve existing 8-bit direct/low-overhead presentation when no color conversion is requested. HDR must not silently force every client through an external compositor or Vulkan layer.
+- **Acceleration:** DRM color-pipeline/overlay features may be opportunistic optimizations, never a correctness prerequisite; retain a correct shader/software fallback.
+
+## Proposed architecture baseline (discussion draft, not normative)
+
+Keep source-image description and output signaling separate.
+
+### Source image description
+An immutable, versioned description of primaries, white point, transfer function, reference white and luminance range. Associate static content semantics with a drawable/window. If dynamic metadata is needed, attach it to a frame/presentation transaction rather than racing mutable window properties.
+
+### Output description
+Per-output sink capabilities and selected output mode/colorspace/bit depth. Read capabilities from EDID; select an output encoding only when both sink and DRM driver support it.
+
+### Composition
+Convert sources into a common linear-light working space before blending. Deliberately tone-map mixed SDR/HDR or mismatched peak luminance, then encode the final composed frame for the output. Never blend PQ/HLG-encoded samples directly.
+
+### KMS handoff
+Modesetting submits metadata describing the final composed frame through the DRM connector `HDR_OUTPUT_METADATA` blob and configures supported `Colorspace`/`max_bpc` properties. Do not forward the monitor's EDID static metadata blob as outgoing frame metadata.
+
+### Compatibility / format strategy
+Preserve the existing 8-bit direct path when no transform is requested. Avoid mandatory Vulkan, forced external compositor, a new core visual class, or a global GL 4.6 minimum.
+
+A possible first format strategy, requiring owner approval, is packed 10:10:10:2 / 30-bit TrueColor-compatible output where supported, with floating-point intermediate buffers internally when available. Client-visible FP16 RGBA can be a later capability, not a prerequisite for first HDR10 output. PQ may be the first practical transfer target because of display support, but HLG semantics must be explicitly defined rather than treated as PQ.
+
+## Suggested staged implementation
+
+0. **Read-only EDID capability integration:** connect the existing parser to the live output path safely and expose capabilities only. No HDR signaling or rendering behavior changes.
+1. **Experimental output mode:** behind an explicit runtime option, negotiate DRM Colorspace/max_bpc and `HDR_OUTPUT_METADATA`; provide safe disable/rollback and SDR fallback.
+2. **Versioned client color-description API:** define source metadata and mixed SDR/HDR conversion; do not reuse core opcodes.
+3. **Complete rendering path:** cover all relevant glamor operations, dynamic metadata where required, advanced formats and optional hardware color-pipeline/plane offload.
+
+Every milestone should test: no-HDR EDID, malformed/short EDID, unsupported KMS properties, hotplug/reconfiguration, SDR-only clients, mixed SDR/HDR, and unchanged legacy 8-bit pass-through. Build/test both with the feature disabled and enabled as applicable.
+
+## Immediate next work for the dedicated HDR session
+
+1. Refresh Xserver `master`, PR #3216, current EDID parsing call sites, RandR/modesetting DRM property handling, and workspace HDR note. Verify all SHAs and call-site claims against current source.
+2. Write a compact normative design/RFC for owner review before implementation. It must define the source metadata object, output/RandR/KMS contract, color pipeline, pixel formats, PQ/HLG semantics, fallback/compatibility, lifetime/security, and test plan. Mark each unresolved item explicitly rather than deciding it implicitly.
+3. Once the design is agreed, implement only milestone 0 as a small isolated change with malformed-EDID safety and integration tests.
+4. Do not revive the stale `wip/hdr-prep` or old PoC as a bulk patch. Create a fresh branch from current master after ownership/worktree checks.
+5. Keep all work within HDR/color management. Do not take over Voyager's PR #4170 or other security/backport work in this separate session.
+
+## Relevant workspace note and skills
+
+- HDR tracker: https://github.com/X11Libre/mpbt-workspace/blob/mtx/agent-config/.starfleet-ai/dashboard/topics/xlibre/hdr-display-support.md
+- Xserver coding style: `.claude/skills/coding-style-xserver/SKILL.md`
+- Xserver test procedure: `.claude/skills/xserver-testing/SKILL.md`
+- Wormhole communication protocol: `.claude/skills/wormhole-communication/SKILL.md`
+
+For cross-agent communication, acknowledgements, status updates and reports, follow the project-independent `wormhole-communication` skill and `COLLABORATION.md`.
