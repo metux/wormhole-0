@@ -399,3 +399,9 @@ Xserver master `9f1d28b59b6af78033b7f0d0c170935308de046f`: `CompWindowRec` store
 Therefore Composite does not provide a global per-screen compositor owner. Spec section 30.14 proposes an exclusive client-owned HDR compositor claim per screen plus a check that the same client owns manual Composite redirection for each subscribed window. Automatic redirection is excluded from v1; `_NET_WM_CM_Sn` remains a discovery convention, not server authorization. PanoramiX/Xinerama scope and helper lifecycle remain open.
 
 No Xserver code changes.
+
+## 2026-11-26 — PanoramiX/Xinerama Composite path
+
+Xserver master `9f1d28b59b6af78033b7f0d0c170935308de046f`: when `compositeUseXinerama` is active, Composite redirect/unredirect requests fan out to each underlying screen. `CompositeNameWindowPixmap` creates a `PanoramiXRes` with one physical pixmap reference per screen. This is distinct from multiple RandR outputs on one ScreenRec, which can still share one output-independent transformed window buffer.
+
+Spec section 30.15 proposes v1 support for ordinary ScreenRec and RandR multi-output, but explicit unsupported capability when the Composite PanoramiX/Xinerama multi-screen path is active. A future protocol could define one logical generation as a set of per-screen buffer descriptors and leases; not designed yet. Existing Composite remains unchanged.
