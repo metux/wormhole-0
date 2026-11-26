@@ -1659,3 +1659,21 @@ The screen claim prevents two different clients from simultaneously acting as th
 - The exact Composite-private helper location and lifecycle callback ordering need a source-level patch design and tests. Do not expose a new public DDX callback or change `ScreenRec`.
 
 This authority model is a proposal, not owner-approved protocol ABI. No Xserver source code has been changed.
+
+### 30.15 PanoramiX/Xinerama scope for v1
+
+Xserver master `9f1d28b59b6af78033b7f0d0c170935308de046f` was inspected in `Xext/composite/compext.c` and `Xext/panoramiX/panoramiX.c`.
+
+Composite has an explicit PanoramiX path when `compositeUseXinerama` is active. RedirectWindow, RedirectSubwindows and their unredirect counterparts translate the logical window resource to each underlying screen and invoke the single-screen operation for each. `CompositeNameWindowPixmap` does not return one physical pixmap: it creates a `PanoramiXRes` whose per-screen entries each hold a reference to that screen's current window pixmap.
+
+This differs from the ordinary multi-output RandR case. Multiple RandR outputs driven by one ScreenRec still consume a common output-independent transformed window buffer. PanoramiX/Xinerama instead fans one logical window operation out across multiple underlying ScreenRecs and returns a logical pixmap resource representing several physical pixmaps.
+
+#### Proposed v1 policy
+
+- Define `AcquireCompositor(screen)` against one ordinary X server ScreenRec. Separate independent X screens can have separate compositor claims.
+- For an ordinary ScreenRec with multiple RandR outputs, keep one per-window transformed buffer in the common linear BT.2020 working space. Do not split it by output; the final output path handles each output independently.
+- If the Composite PanoramiX/Xinerama multi-screen path is active for the screen, report the color-managed per-window handoff unsupported for v1. Keep the existing Composite path fully operational and do not partially transform only some physical screen copies.
+- Do not infer that Xinerama is supported merely because a single logical root/window XID exists. A future protocol version may define one logical generation containing an ordered set of per-ScreenRec buffer descriptors, each with its own physical lifetime and release fence, but this requires a separate aggregate lease model.
+- The v1 capability result must make the unsupported PanoramiX state explicit, so the compositor can fall back to its existing legacy Composite behavior without treating it as a fatal server error.
+
+This is a conservative compatibility proposal, not an owner-approved permanent exclusion. Reconsider Xinerama only with a defined multi-screen generation/lease bundle and tests for partial acquisition failure, per-screen hotplug, teardown and release ordering.
