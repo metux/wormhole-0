@@ -348,3 +348,24 @@ Design proposal recorded in HDR spec section 30.10 (commit `5cb70e943dd77d791e96
 No Xserver source code was changed. No implementation authorization was granted.
 
 FP16 DMA-BUF format research follow-up: `DRM_FORMAT_ABGR16161616F` is a concrete candidate for the RGBA FP16 handoff. Its DRM definition describes little-endian A:B:G:R 16-bit floating components, corresponding to R/G/B/A component order in little-endian memory. It is not yet a fixed requirement; runtime GL renderability, GBM allocation/modifier support, export and compositor import/channel/alpha interpretation must all be tested. Big-endian handling and alternative formats remain open. Specification follow-up commit: `1e7ce056f3277694bd1c2841c048467641e893e9`.
+
+
+### 2026-11-26 — Buffer-generation state machine and release-fence lifecycle
+
+Refreshed Xserver master HEAD: `f6df545643f02d04d06ac08f7c81f4da05f7c4cc`. Rechecked the current Glamor EGL native-fence export helper: `glamor_egl_flush_fence_fd()` creates a native-fence sync, calls `glFlush()`, duplicates the fence FD, destroys the EGL sync and returns the FD. This proves a producer-fence export building block only. The existing `glamor_egl_syncobj_supported()` remains a DRI3-specific timeline-syncobj probe, not proof of compositor release support.
+
+Specification section 30.11 committed as `cb454408f839cd91db312d97ebcf2214e74f98c5`.
+
+Key proposed rules:
+- Separate logical content-generation lifecycle from physical Glamor allocation lifecycle.
+- A published generation is immutable and leased to the compositor until one matching release is received.
+- Key each lease by client epoch, screen, window and monotonic generation; reject stale, duplicate and mismatched releases.
+- Producer fence covers all transform writes; compositor waits before sampling.
+- Consumer release fence covers all compositor reads; Glamor imports it and queues a GPU-side wait in the same serialized context/queue before reuse.
+- CPU blocking waits are not the normal fallback. If both native-fence directions and server-side wait cannot be proven, do not advertise the HDR handoff.
+- No buffer reuse on disconnect, timeout, missing release, or fence-import failure. Quarantine/orphan instead; timeout is diagnostic, never proof of GPU completion.
+- Bound the pool, coalesce Damage/Present updates, and never block the Xserver event loop waiting for a buffer.
+- v1 proposal uses full-window transforms into fresh destinations; partial updates/copy-forward are deferred until immutable-generation handling is proven.
+- Provider API needs separate release-fence ordering, reusable-pool return, terminal destruction, and provider quiesce operations. The old illustrative single `release_buffer()` callback is not sufficient.
+
+No Xserver source code was changed. The new state machine is a proposal pending owner review; implementation remains unauthorized.
