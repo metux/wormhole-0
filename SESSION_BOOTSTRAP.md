@@ -112,6 +112,10 @@ Discovery reported the exact-head read-only review complete for `d161b1b81292d11
 
 **Remaining work:** issue https://github.com/mpbt-hq/starfleetctl/issues/24 tracks durable offered/submitted/turn-started/completed/failed lifecycle, restart recovery, and correlated end-to-end tests proving a specific event's model turn started and completed. The proposed correlation design is recorded in `decisions/2026-11-25--comms-event-lifecycle-correlation.md`. Additional OpenCode v1.19.3 source inspection confirmed `experimental.chat.system.transform` runs before `chat.params` in `packages/opencode/src/session/llm/request.ts`. Although `chat.params` carries `message: UserMessage` with `id` and `sessionID`, it is too late to correlate that same transform invocation. OpenCode v1.19.3 source confirms the user-message `message.updated` event is published before the request loop reaches system transformation, but does not prove the plugin's asynchronous event callback completes first. It remains the candidate; verify plugin event delivery ordering or query `session.messages` in the transform hook before implementation. Do not implement the `chat.params` approach. See `decisions/2026-11-25--opencode-user-message-event-order.md` and `decisions/2026-11-25--opencode-current-turn-correlation-ordering.md`. Branch `feat/comms-event-lifecycle` has been created from the PR #23 head for issue #24, but lifecycle code is not implemented yet. Neither `seen_mark` nor `promptAsync` returning is completion proof.
 
+## Dedicated X11Libre HDR session
+
+HDR/color-management work is handled in its own ChatGPT session, separate from Starfleetctl and XAverius. For that session, read `X11LIBRE_HDR_PROJECT_CONTEXT.md` before acting; it records the 2026-11-26 verified implementation state, PoC blockers, open design decisions and proposed milestones. Refresh current Xserver `master` and the workspace HDR tracker before relying on recorded SHAs. The HDR context is a handoff, not an implementation authorization; owner approval is required for unresolved design choices.
+
 ## XAverius / Xserver
 
 - Implementation: `X11Libre/xserver:wip/xaverius`.
