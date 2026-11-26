@@ -405,3 +405,9 @@ No Xserver code changes.
 Xserver master `9f1d28b59b6af78033b7f0d0c170935308de046f`: when `compositeUseXinerama` is active, Composite redirect/unredirect requests fan out to each underlying screen. `CompositeNameWindowPixmap` creates a `PanoramiXRes` with one physical pixmap reference per screen. This is distinct from multiple RandR outputs on one ScreenRec, which can still share one output-independent transformed window buffer.
 
 Spec section 30.15 proposes v1 support for ordinary ScreenRec and RandR multi-output, but explicit unsupported capability when the Composite PanoramiX/Xinerama multi-screen path is active. A future protocol could define one logical generation as a set of per-screen buffer descriptors and leases; not designed yet. Existing Composite remains unchanged.
+
+## 2026-11-26 — Provisional v1 protocol matrix
+
+Spec section 30.16 adds a field-level request/reply/event matrix for QueryVersion, QueryCapabilities, AcquireCompositor, ReleaseCompositor, SubscribeWindow, UnsubscribeWindow, AcquireBuffer and ReleaseBuffer. It distinguishes ordinary frame races (`NOT_READY`, `STALE`, `UNSUPPORTED`) from X protocol errors, defines BufferReady/BufferInvalidated/StreamError events and states lease/generation invariants.
+
+The matrix is not a wire ABI. Exact field widths, opcodes, xcb-proto XML, extension error mapping and generated-binding tests remain open. No Xserver implementation.
