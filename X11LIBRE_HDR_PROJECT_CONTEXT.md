@@ -251,3 +251,20 @@ The owner raised the possibility of converting directly into each monitor's outp
 - Audit Present/direct scanout, overlays, cursors and video planes separately; primary-plane color management alone is insufficient.
 
 This is a proposal for investigation, not yet an owner-approved architecture or implementation authorization.
+
+## 2026-11-26 — modesetting output-pipeline audit and NVIDIA compatibility requirement
+
+Xserver `master` was refreshed at `bb06f6ddca766c41c81494ae228c11e53df59590`. The current modesetting DDX source was inspected in `hw/xfree86/drivers/video/modesetting/drmmode_display.c`, `drmmode_display.h` and `present.c`.
+
+Verified observations:
+- The modesetting CRTC property model currently includes ACTIVE, MODE_ID, GAMMA_LUT, GAMMA_LUT_SIZE and CTM; no DEGAMMA_LUT support was found in that model.
+- GAMMA_LUT is enabled only when the CRTC reports a nonzero GAMMA_LUT_SIZE. The current default enables it for sizes up to 4096, with the existing UseGammaLUT option as an override. Otherwise the legacy drmModeCrtcSetGamma path is used.
+- The LUT is 1D RGB; CTM is a separate 3x3 transform. This does not constitute a complete HDR pipeline.
+- Present flip eligibility checks format/modifier support across every active CRTC. Cursor programming is separate; sprite/overlay visibility can affect flip eligibility.
+- The modesetting DDX uses shared screen-pixmap and per-CRTC scanout state; more investigation is required before claiming support for arbitrary per-output shader targets, clone topologies or all PRIME paths.
+
+**Owner requirement:** future HDR work must not break the proprietary NVIDIA Xorg DDX; NVIDIA is not required to support HDR. Keep HDR opt-in and runtime capability-gated. A DDX without support must preserve legacy SDR/X11 behavior. Avoid mandatory new driver callbacks, public driver-ABI changes, generic-core DRM/GBM/Vulkan dependencies, or a raised global OpenGL baseline. Preserve legacy Composite, Damage, Present, DRI3, RandR gamma, pixmap and scanout behavior when the new contract is not negotiated.
+
+The proprietary NVIDIA DDX is external to this repository and was not inspected or tested. Its compatibility is a mandatory future validation target, not a verified fact. Detailed findings and test gates: spec section 28. Durable owner requirement: `decisions/2026-11-26--hdr-driver-compatibility-and-nvidia.md`.
+
+No Xserver implementation changes were made. No implementation authorization follows from this audit.
