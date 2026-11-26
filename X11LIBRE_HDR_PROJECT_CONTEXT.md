@@ -282,3 +282,21 @@ Verified distinction: ScreenRec's legacy `void *devPrivate` is a single opaque D
 The NVIDIA compatibility shim is unusually explicit: `CONFIG_LEGACY_NVIDIA_PADDING` conditionally inserts `reserved_for_nvidia_470_and_390` between `NameWindowPixmap` and `totalPixmapSize`; Meson option `legacy_nvidia_padding` controls it; `xf86Module.h` selects ABI 28.1 vs 28.0; `LoaderGetABIVersion()` reports special NVIDIA ABI 25.2 when padding is enabled and the module is identified as proprietary NVIDIA. `dix/pixmap.c` initializes the reserved field to NULL. The separate `legacy_nvidia_340x` option concerns old entry points. HDR must not change any of these layouts, options, or loader decisions.
 
 Detailed owner direction, lifetime constraints and test matrix: spec section 29. Durable decision: `decisions/2026-11-26--hdr-screen-private-ops-and-nvidia-abi.md`. No Xserver source was modified and no implementation is authorized.
+
+
+## 2026-11-26 — Internal Xserver-Core / DDX / Glamor boundary
+
+Xserver `master` was refreshed at `3132e4b7997b525d046e727c1db6656d14b5bc20`; workspace `X11Libre/mpbt-workspace:mtx/agent-config` was refreshed at `aba0f93896274daa394cc7e3e343df55d6486ef7`. The current Glamor source was inspected: `glamor_screen_private` is already attached through a Glamor-owned `PRIVATE_SCREEN` key; normal pixmap storage is represented by `glamor_pixmap_private` and FBOs whose formats derive from X pixmap depth. The DRI3 export path is `PixmapPtr`-based and is not itself a color-managed buffer contract. Glamor currently accepts desktop GL 2.1 / GLES 2.0 baselines; FP16 renderability and shader precision are not guaranteed by those baselines.
+
+**Design proposal recorded in specification section 30** (spec commit `e845da71c89f60ddf10526bb3065594ce6753427`):
+- Three ownership layers: DIX/core policy and generations; optional per-screen DDX provider; Glamor GPU transform engine. A separately negotiated Composite extension exposes transformed buffers.
+- Use a Glamor-private opaque FP16 color-buffer object, not a fake 64-bpp X pixmap or changed core pixmap depth.
+- Core owns a copied/versioned optional provider ops table in its existing `PRIVATE_SCREEN` record. The DDX registers after Glamor/context initialization; no registration means legacy SDR.
+- First in-tree provider may be modesetting only. It delegates GPU transforms to Glamor and coordinates external buffer export/sync. Proprietary NVIDIA DDX need not register or support HDR.
+- No direct Glamor dependency in generic DIX; no GL/EGL/GBM/DRM types in the core provider interface; no mandatory Vulkan/DRI3 dependency and no higher GL baseline.
+- Probe actual FP16 FBO renderability, shader precision, source import, compositor export, dimensions and end-to-end synchronization at runtime. Capability is per screen and end-to-end.
+- Core owns source/transformed generations; publish immutable synchronized generations, retain old ones until compositor release, and do not update a buffer still in use.
+- Legacy Composite semantics remain unchanged absent explicit versioned negotiation. Failure must not leak an untransformed buffer under the working-space contract.
+- Exact provider API, transport, Composite wire contract, full source-path coverage, dimension/tiling policy and failure transition remain open.
+
+No Xserver source code was changed. This is a design proposal, not implementation authorization.
