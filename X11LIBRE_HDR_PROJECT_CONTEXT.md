@@ -391,3 +391,11 @@ X11Libre/mirror.fdo.libxcb master was inspected at `aa7f3256060451ad65a38feeccf7
 The current implementation sets `XCB_MAX_PASS_FD` to 16, but this is an implementation limit, not a wire ABI. FD passing is conditional on `HAVE_SENDMSG`. Proposed v1 cap: up to four DMA-BUF object FDs plus one producer fence in AcquireBuffer; one release-fence FD or zero for NO_USE. The extension must ship protocol XML and generated bindings; raw requests without the reply-FD flag are unsafe. Client-side FD support is a build prerequisite that the server cannot infer from its own QueryCapabilities response.
 
 Spec section 30.13 records these details. The concrete XML schema, runtime transport matrix and compositor interoperability remain unverified. No Xserver code changes.
+
+## 2026-11-26 — Composite redirect ownership audit
+
+Xserver master `9f1d28b59b6af78033b7f0d0c170935308de046f`: `CompWindowRec` stores per-window `CompClientWindowRec` registrations. `compRedirectWindow()` permits only one `CompositeRedirectManual` client per window (`BadAccess` on a second), while automatic registrations may coexist. `compRedirectSubwindows()` registers existing children individually and future children through its parent resource; Composite resource cleanup removes the per-client registrations.
+
+Therefore Composite does not provide a global per-screen compositor owner. Spec section 30.14 proposes an exclusive client-owned HDR compositor claim per screen plus a check that the same client owns manual Composite redirection for each subscribed window. Automatic redirection is excluded from v1; `_NET_WM_CM_Sn` remains a discovery convention, not server authorization. PanoramiX/Xinerama scope and helper lifecycle remain open.
+
+No Xserver code changes.
