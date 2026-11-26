@@ -1677,3 +1677,43 @@ This differs from the ordinary multi-output RandR case. Multiple RandR outputs d
 - The v1 capability result must make the unsupported PanoramiX state explicit, so the compositor can fall back to its existing legacy Composite behavior without treating it as a fatal server error.
 
 This is a conservative compatibility proposal, not an owner-approved permanent exclusion. Reconsider Xinerama only with a defined multi-screen generation/lease bundle and tests for partial acquisition failure, per-screen hotplug, teardown and release ordering.
+
+### 30.16 Provisional v1 request/reply and event matrix
+
+The following field-level matrix is the next refinement of the proposed extension. It is intentionally not an X wire layout: opcodes, exact field widths, padding, xcb-proto XML syntax and extension error numbers remain unfrozen.
+
+| Operation | Inputs | Successful result | Failure / lifecycle semantics |
+|---|---|---|---|
+| `QueryVersion` | Client major/minor version | Negotiated major/minor version | Reject unsupported major; minor negotiation follows the DRI3-style highest-common-version rule only if explicitly adopted |
+| `QueryCapabilities` | Screen identifier | Working-space ID; end-to-end capability bits; accepted FourCC/modifier pairs; max dimensions; max plane/object counts; producer/release synchronization support | Must not advertise FP16 handoff unless transform, export, import, and both fence directions are operational on this screen |
+| `AcquireCompositor` | Screen identifier | Exclusive claim plus new connection epoch | Existing owner returns already-owned/BadAccess; claim resource is automatically released on client teardown |
+| `ReleaseCompositor` | Screen and epoch | Claim released; stream stops accepting new subscriptions/acquisitions | Outstanding leases are not implicitly released and remain quarantined until safe completion |
+| `SubscribeWindow` | Window and epoch | Stream subscription; server begins publishing BufferReady events for transformed generations | Require same client to own Composite manual redirection for this window; automatic redirect is unsupported in v1 |
+| `UnsubscribeWindow` | Window and epoch | No new BufferReady events; unacquired generations may be discarded | Already acquired generations remain leased until matching ReleaseBuffer or safe quarantine |
+| `AcquireBuffer` | Window, epoch and exact generation from BufferReady | Descriptor payload plus DMA-BUF object FDs and producer-fence FD | `NOT_READY` if transform incomplete; `STALE` if generation was superseded before acquisition; `UNSUPPORTED` if no compatible descriptor; failed/partial FD send quarantines storage |
+| `ReleaseBuffer` | Window, epoch, generation and `FENCED` or `NO_USE` mode; one FD only for `FENCED` | Reply confirms validation and that the release wait was queued (`QUEUED`) | Invalid/stale/duplicate release rejected; fence-import failure quarantines the allocation and reports backend failure; it is not reusable merely because request arrived |
+
+#### Events
+
+- `BufferReady(window, epoch, generation, width, height, working_space_id)`: announces one immutable generation is available. Events may be coalesced; the compositor should acquire the newest generation and handle `STALE` by waiting for or requesting the newest announcement.
+- `BufferInvalidated(window, epoch, generation, reason)`: the generation is no longer available for a new acquisition (e.g. superseded before lease, window destroyed or stream revoked). It does not revoke a generation already acquired.
+- `StreamError(window, epoch, status)`: reports transform/backend failure or capability loss. It does not implicitly release outstanding leases.
+
+#### Descriptor payload
+
+An `AcquireBuffer` success reply should carry: `epoch`, `generation`, `width`, `height`, `fourcc`, `modifier`, `plane_count`, `object_count`, `working_space_id`, and per-plane `object_index`, `stride`, and `offset`. Attached FDs are ordered as DMA-BUF objects followed by the producer fence. The first reply pad byte (`nfd`) equals `object_count + 1`. V1 limits remain at most four planes and four object FDs.
+
+#### Status and error separation
+
+Use core X errors for malformed XIDs, invalid values, authorization failures and allocation errors where their semantics fit (`BadWindow`, `BadValue`, `BadAccess`, `BadAlloc`). Use explicit extension status values for normal asynchronous states (`NOT_READY`, `STALE`, `UNSUPPORTED`, `BACKEND_FAILED`, `QUEUED`, `QUARANTINED`) rather than treating expected frame races as fatal X protocol errors. The exact mapping must be checked against X server request-dispatch conventions and xcb-proto generated reply/error handling.
+
+#### Invariants
+
+- Every generation is identified by `(screen, client epoch, window, generation)`; generation numbers are monotonic within an epoch and never reused.
+- A generation becomes leased only after the FD-bearing reply has been successfully published. A failed or partial send never creates a reusable allocation.
+- A successful ReleaseBuffer reply means the release fence was accepted/imported and the wait was ordered before future writes; it does not mean the GPU is idle.
+- `NO_USE` is valid only when the compositor submitted no GPU read for that acquired generation.
+- A client must close all received FDs before freeing the reply object. XCB owns outgoing FDs after the generated request call.
+- `BufferReady` events carry no FDs; every FD transfer is tied to a specific request/reply with generated bindings.
+
+These request names, status names and fields are provisional design vocabulary only. A future step must translate this matrix into a real xcb-proto schema, generate bindings, compile them, and add round-trip tests before any server implementation.
