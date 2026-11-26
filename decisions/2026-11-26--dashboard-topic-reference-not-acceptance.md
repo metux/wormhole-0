@@ -21,9 +21,10 @@ Plugin startup, `comms init`, session recreation, model-activity telemetry,
 and heartbeats must not infer or overwrite task association or board status.
 They refresh process/model liveness metadata only and preserve an existing
 status/task/note record; a new ship with no prior record defaults to `idle`.
-Stale or previously offline records may return to `idle`. Task status is
-changed only by explicit task lifecycle operations or explicit Comms status
-commands.
+Stale or previously offline records may return to `idle`. Startup must run
+`comms init` before refreshing the plugin PID/heartbeat, so stale records are
+pruned before the new process makes them appear live. Task status is changed
+only by explicit task lifecycle operations or explicit Comms status commands.
 
 The Dashboard-Topic marker remains in commission messages as a reference.
 Explicit `task <slug>` / `task clear` commands remain supported as manual
