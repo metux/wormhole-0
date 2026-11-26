@@ -307,7 +307,7 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - Previous tree-equivalent SHA `d23a8ca73f42a1634307222eb272b42f6bc3de35` passed all three jobs in Actions run `45823658776` (plugin-typecheck, Go 1.22.x, stable). The rewritten SHA needs its own exact-head CI run; at the time of this update no run was yet returned for the new SHA. PR #33 remains Draft/open, not merged, awaiting exact-head CI and independent review.
 
 
-### Starfleetctl PR #33 — exact-head CI and review status — 2026-11-26 13:4xZ
+### Starfleetctl PR #33 — exact-head CI and review status — 2026-11-26 13:55Z
 
 - Exact current PR #33 head `5783f16af0ed45ebbcb0022f19c22b8f16f63daf` completed Actions run `45830846333` successfully. All three jobs passed: `plugin-typecheck` (including `make check-plugin` and `make test-plugin`), `build-test (stable)`, and `build-test (1.22.x)`; both Go jobs ran build, vet, and full `go test ./... -count=1 -timeout 300s`.
 - Rechecked PR #33: open, Draft, mergeable, one commit, 13 changed files; base master remains `c18352bb3269524294fda90d6d319ddef92098dd`; head remains `5783f16af0ed45ebbcb0022f19c22b8f16f63daf`. No submitted reviews, no inline review threads, and no PR comments were present at this check. PR description now records exact-head green CI and accurately states that independent review and owner merge authorization remain outstanding.
