@@ -543,3 +543,166 @@ The length issue is not isolated to the new HDR walker. Existing extension consu
 The first choice is more explicit but changes the public structure again; the second may alter the historical meaning of `no_sections`. Audit all consumers before choosing. The legacy one-block entry point must not claim or expose unavailable extensions, while size-aware callers should retain complete valid extensions only after validating their actual byte extent. No production call site should infer completeness from `size > 128` alone.
 
 No Xserver source was modified and no build/test was run. This remains a prerequisite design/code-review finding for Stage 0.
+
+
+## 18. Visual model and client-visible drawable types (proposal; OPEN)
+
+### 18.1 Do not conflate a Visual with a pixel format
+
+An X11 Visual describes the interpretation and colormap model of a window's core pixel values. It is not a general buffer-format descriptor and does not carry transfer functions, primaries, white point, reference white or luminance range.
+
+The current Xserver `VisualRec` contains a Visual ID, core visual class, RGB masks/offsets and colormap properties. Pixmap storage layout is described separately by `PixmapFormatRec` (depth, bits-per-pixel and scanline padding). Render picture formats are another layer. These existing abstractions must not be collapsed into one HDR-specific type.
+
+### 18.2 Core Visual class decision
+
+**Proposal: do not introduce a new core X11 Visual class for HDR/FP16 in the first version.**
+
+The six core Visual classes (StaticGray, GrayScale, StaticColor, PseudoColor, TrueColor and DirectColor) have established protocol and client-library semantics. An implementation-private class value such as 6 is not a portable X11 Visual class. Existing clients may reject or mis-handle an unknown class, and server-side code often branches explicitly on the established classes.
+
+Instead, an HDR-capable window should normally continue to use a core-compatible Visual class, most commonly TrueColor. The color-management extension may expose additional, versioned per-Visual capabilities/attributes, queried by Visual ID. This is referred to in this draft as an **extended Visual profile**, not a new core Visual class.
+
+Candidate extended-Visual attributes:
+- whether the Visual may be used with the color-managed window/buffer path;
+- supported or preferred client buffer formats;
+- whether a core pixmap representation exists for the selected format;
+- alpha presence and alpha representation;
+- supported rendering/transport paths (core X, Render, GLX, DRI3 or extension buffer import);
+- restrictions such as required extension version or synchronization support.
+
+The extension must not change the meaning of the core Visual class or its RGB masks. Unknown extended attributes must be safely ignorable by older clients.
+
+### 18.3 FP16 and the limits of core pixmaps
+
+RGBA FP16 normally requires 64 bits per pixel. The current core pixmap format model and server code have 32-bpp assumptions in important paths; a new Visual ID alone does not make a 64-bpp core pixmap legal or make core X drawing operations understand floating-point channels.
+
+Therefore:
+- packed 10:10:10:2 may be represented through a conventional depth-30 / 32-bpp TrueColor-compatible path where the DDX and server support it;
+- client-visible FP16 should initially be represented as an extension-managed buffer/surface format, not by pretending it is an ordinary core depth/bpp pixmap;
+- the extension must define how such a buffer is associated with a Window and how GLX/DRI3 or another transport imports/exports it;
+- core X drawing requests must not silently write integer pixels into an FP16 buffer. Either define explicit conversion semantics or reject unsupported operations on that surface.
+
+The extension may later add a richer drawable configuration model, but it must not require changing the core Visual class enumeration merely to describe a new storage format.
+
+### 18.4 Window creation and Visual selection
+
+A client may select a Visual ID when creating a window using the existing core CreateWindow request. The extended Visual profile is queried before selection and is immutable for that Visual on that screen.
+
+The selected Visual does not itself select the source color description. After window creation, the client explicitly associates an immutable color-description object with the window (or with an extension-managed buffer/frame where required). This keeps window compatibility, pixel storage and colorimetry independent.
+
+**OPEN:** Determine whether GLX FBConfigs should advertise the extended Visual profile and how a client chooses a Visual/buffer combination when the GLX Visual is only a compatibility shell for an extension-managed FP16 surface.
+
+## 19. Pixel and buffer format model (proposal; OPEN)
+
+A buffer format descriptor must describe storage only. At minimum it contains:
+- format identifier, with a stable Xlibre-defined mapping to DRM FourCC where applicable;
+- channel order and component data type (UNORM, SNORM, FLOAT, etc.);
+- component widths and offsets, including alpha;
+- plane count, per-plane offsets, strides and modifiers for imported/exported DMA-BUFs;
+- dimensions and any required alignment;
+- alpha representation (straight or premultiplied);
+- synchronization/import/export capabilities.
+
+The format identifier is not a color-space identifier. In particular, FP16 does not imply scRGB, and 10:10:10:2 does not imply BT.2020 or PQ.
+
+Initial candidate format tiers:
+1. Existing core-compatible 8-bit formats: unchanged legacy path.
+2. Packed 10-bpc RGB (commonly 10:10:10:2 in a 32-bit word): optional client-facing format where existing Xserver/DDX/GLX paths support it.
+3. RGBA FP16: extension-managed client buffer format, requiring explicit capability negotiation and buffer transport; not a new core pixmap depth in v1.
+4. X-server-owned high-precision transformed buffers: internal format selected by the server, independently of the source buffer format and the Visual.
+
+The extension must not promise a format merely because the DRM driver can scan it out. Import, rendering, sampling, transformation, export and compositor consumption are separate capabilities.
+
+## 20. Color-description object and attachment model (proposal; OPEN)
+
+### 20.1 Immutable description object
+
+The protocol should use an immutable, versioned Color Description resource. A client creates it, receives a resource ID, and may bind it to a window or an extension-managed buffer/frame. Immutability avoids races where a client changes a profile while the server is processing Damage or Present work. A changed description is represented by creating a new object and rebinding it.
+
+The object should identify:
+- RGB primaries and white point, or a registered named color space with exactly defined chromaticities;
+- transfer function / encoding (at least Linear, sRGB and the explicitly selected HDR transfer functions);
+- reference-white convention and units;
+- minimum, nominal/reference and peak luminance semantics where relevant;
+- optional static content/mastering metadata, with field-specific units and validation;
+- rendering intent / gamut mapping preference, if supported;
+- alpha semantics only where not already fixed by the buffer format.
+
+ICC profile support, if added, must be separately versioned and specify maximum profile size, validation, caching, canonical identity and lifetime. It must not be an unbounded arbitrary blob.
+
+### 20.2 Attachment scope
+
+**Proposal for v1:** bind the static source Color Description to a Window. The description characterizes the color values produced for that window, independent of the rendering API.
+
+- A window without an explicit description remains in the legacy/unmanaged color mode until the negotiated color-managed path defines its legacy interpretation.
+- Child windows do not silently inherit a parent's explicit description in v1; each window has its own explicit state or the documented legacy default. This avoids accidental propagation across independently rendered child content.
+- Reparenting does not change the description.
+- Destroying a window releases its binding; the immutable description resource remains alive while referenced by other windows or buffers.
+- A description change invalidates the entire transformed content for that window, not merely the next damaged rectangle.
+
+**OPEN:** Decide whether a pixmap/buffer-level override is required in v1 for clients that render differently encoded content into one window. If required, define precedence (frame/buffer override over window default) and make the description immutable for the lifetime of the submitted buffer/frame.
+
+### 20.3 Dynamic metadata
+
+Dynamic per-frame metadata must be attached atomically to the corresponding Present/buffer submission, not updated through a mutable window property. The metadata and buffer generation must travel as one presentation transaction so frame N metadata cannot be applied to frame N+1.
+
+PQ and HLG are distinct transfer functions and require distinct reference/peak luminance definitions. The protocol must not treat one as an alias for the other.
+
+## 21. Color transform and compositor handoff (proposal; OPEN)
+
+### 21.1 Transform semantics
+
+For every window entering the negotiated color-managed compositor path, the X server is responsible for producing the compositor-facing transformed representation. The compositor must not need to inspect or transform each window's original source color description.
+
+The conceptual transform is:
+
+`source encoded samples -> decode transfer function -> source linear RGB -> convert primaries/white point -> common working-space linear RGB -> encode working-buffer representation`
+
+The transform must preserve alpha semantics. Color channels are transformed in linear light. For premultiplied input, the implementation must correctly account for premultiplication (including zero-alpha pixels); it must not apply a nonlinear transfer function directly to premultiplied encoded values.
+
+The compositor-facing contract must specify:
+- exact working-space primaries, white point, scale/reference-white convention and numeric range;
+- exact buffer format and alpha representation;
+- synchronization required before compositor reads;
+- generation, replacement, release and resize semantics;
+- whether the compositor may sample the buffer directly or must import it through a specified API.
+
+### 21.2 Legacy source content
+
+A color-managed compositor cannot receive a mixture of transformed HDR buffers and untransformed legacy SDR buffers while being told that all buffers share one working-space interpretation.
+
+**OPEN — compatibility policy:** define a deterministic legacy source interpretation for windows without explicit color metadata (for example, a documented sRGB assumption or a server-configured legacy profile). When the compositor negotiates the color-managed handoff, the X server must transform legacy windows according to that policy as well. If the policy cannot be applied safely, the server must keep the legacy Composite path rather than silently mixing incompatible representations.
+
+A compositor that has not negotiated the new handoff continues to receive the existing legacy Composite representation unchanged.
+
+### 21.3 Responsibility boundary
+
+The X server performs per-window source-to-working-space conversion. The compositor performs spatial composition, clipping, stacking, effects and alpha blending under the declared working-space semantics. The final output transform (tone mapping, gamut mapping, output transfer encoding and output metadata) remains a separate output responsibility and must be coordinated with the final scanout path.
+
+## 22. Proposed extension surface (conceptual; no wire ABI selected)
+
+A single versioned extension should own color-management semantics and capability negotiation. Names below are descriptive placeholders, not approved protocol names or opcode assignments.
+
+Candidate operations:
+- QueryVersion / QueryCapabilities;
+- QueryVisualProfiles (extended Visual attributes by screen and Visual ID);
+- QueryBufferFormats (format/import/export/render/transform capabilities);
+- CreateColorDescription / DestroyColorDescription / QueryColorDescription;
+- SetWindowColorDescription / GetWindowColorDescription;
+- attach a color description and optional dynamic metadata atomically to a buffer/Present transaction where required;
+- negotiate a versioned color-managed Composite handoff.
+
+The extension must define error codes, byte order, bounds, resource ownership, authorization, request ordering, event/error behavior and version negotiation. It must not reuse core opcodes or encode private state through malformed core requests.
+
+The extension should be split internally into independent capability groups so a server can expose source metadata support without claiming FP16 import, and expose FP16 buffer transport without claiming a particular output mode. A capability must only be advertised when the full relevant path is usable.
+
+## 23. Owner decisions required before freezing this part of the design
+
+1. **Visual policy:** accept the proposed extended-Visual profile on top of existing core Visual classes, rather than a new core Visual class?
+2. **FP16 scope:** accept extension-managed FP16 buffers in v1, while keeping them outside ordinary core pixmap depth/bpp semantics?
+3. **10-bpc staging:** support packed 10:10:10:2 as an optional conventional path where available, without making it the universal HDR format?
+4. **Color Description binding:** accept immutable window-level descriptions for v1, with frame/buffer-level dynamic metadata only where required?
+5. **Legacy interpretation:** choose the legacy SDR profile used when a compositor negotiates the common working-space handoff but a window has no explicit description?
+6. **Working space:** select exact primaries, white point, reference-white convention, numeric range and compositor buffer format?
+7. **Transfer-function scope:** select which transfer functions are mandatory in v1 (sRGB/linear/PQ/HLG) and define their luminance semantics?
+
+All proposals in sections 18–23 remain draft until the owner explicitly approves them. No Xserver implementation is authorized by this document.
