@@ -193,3 +193,16 @@ Recommended compositor-facing space:
 Rationale: BT.2020/D65 aligns with BT.2100 HDR signaling; a fixed 203 cd/m² scale keeps per-window transforms independent of monitor/output. ITU-R BT.2408 notes reference-white practice can vary with display peak; Xlibre's proposal intentionally uses 203 as an internal canonical scale, not a universal output-white setting.
 
 No Xserver source was changed. No implementation authorization follows from this proposal.
+
+
+## 2026-11-26 — Owner decisions: working space, FP16 handoff and legacy SDR
+
+The owner approved the following design direction in the dedicated HDR session; the detailed proposal is in sections 24–25 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md`:
+
+- Common compositor working space: linear BT.2020 / D65, output-independent, neutral RGB 1.0 = 203 cd/m².
+- Negotiated compositor handoff: RGBA IEEE-754 binary16 (FP16), linear premultiplied alpha. This remains capability-negotiated; the fallback and complete wire contract must still be designed.
+- Unmanaged legacy windows: implicit sRGB primaries, D65 and IEC 61966-2-1 transfer function.
+- Legacy SDR reference white: session/server-wide configurable setting, default 80 cd/m² (conventional sRGB reference viewing). The setting is not per-output; explicit Color Descriptions override it.
+- A session value of 203 cd/m² is a valid user/session choice for HDR-desktop graphics white. At the default 80 cd/m², legacy sRGB white maps to working RGB approximately 0.3941; at 203 cd/m² it maps to 1.0.
+
+Configuration interface and allowed range remain open. If runtime changes are supported, every affected legacy window must be fully retransformed into a new synchronized buffer generation before publication. No Xserver implementation was authorized or changed.
