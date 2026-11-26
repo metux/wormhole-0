@@ -232,3 +232,12 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - **Bootstrap/packaging invariant explicitly required by owner:** every new plugin source/helper/runtime file must be added to canonical bootstrap/install/packaging manifests and their tests in the same change; verify generated/deployed plugin contents. Never leave helper modules uninstalled.
 - Sequencing: follow PR #29; reconcile PR #25 and issue #24 before choosing the implementation base/branch. Do not merge #29 or restart/relaunch ships without explicit owner approval. No force-push.
 - No implementation has started; issue #30 is open and unassigned. The Wormhole message is published, but no import/acknowledgement by another agent is claimed.
+
+
+### Starfleetctl issue #30 — bootstrap plugin-asset parity test refinement (2026-11-26)
+
+- Owner requested an automatic regression test proving that every canonical plugin runtime file is embedded and installed by bootstrap.
+- Added acceptance criteria to [Starfleetctl issue #30](https://github.com/mpbt-hq/starfleetctl/issues/30): recursively discover runtime assets under `fragments/opencode-plugins/`, compare source files with the Go-embedded filesystem, run the real installer in a temporary workspace, compare installed paths and bytes, and verify entry-point registration versus helper-module installation. CI must fail on missing/unexpected assets, omitted runtime extensions, or unregistered entry points.
+- Current `master` implementation dynamically scans embedded `.ts`/`.mjs` assets in `verifyOpencodePlugins`; the current focused test `TestFixOpencodePluginsInstallsModuleAssets` still hard-codes helper names. The plugin entry point imports three helpers (`session-resolution.mjs`, `inbox-response.mjs`, `runtime-identity.mjs`), while that test currently lists only two. This is a concrete coverage gap; the discovery-driven parity test should replace the manually maintained helper-name slice.
+- The source/embedded/installed comparison must distinguish runtime assets from build/test/config files intentionally present under the source directory. New runtime extensions must not silently fall through as non-runtime.
+- This is a planned acceptance criterion only; no implementation or CI run has been performed for it yet.
