@@ -1,0 +1,5 @@
+message: w0-20261126T125515Z-chatgpt-defiant-post-restart-confirm.md
+mailbox: Defiant
+from: new
+failed_at: 2026-11-26T12:54:19Z
+reason: message must start with '---' front matter delimiter
