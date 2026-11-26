@@ -188,7 +188,7 @@ Recommended compositor-facing space:
 - Values above 1.0 and negative RGB intermediates are valid; no source-stage clamp to [0,1] and no gamut mapping until output conversion.
 - Transformed handoff uses linear premultiplied alpha; alpha mode on source buffers is separate metadata from pixel format.
 - PQ must be decoded to absolute luminance. HLG cannot be advertised as fully supported until system gamma / nominal peak assumptions are specified.
-- Legacy SDR reference white, chromatic adaptation method and non-finite FP input policy remain open.
+- Legacy SDR reference white is now owner-decided (203 cd/m² default, configurable); chromatic adaptation is owner-decided in section 26. Remaining open items include non-finite FP input policy and HLG luminance semantics.
 
 Rationale: BT.2020/D65 aligns with BT.2100 HDR signaling; a fixed 203 cd/m² scale keeps per-window transforms independent of monitor/output. ITU-R BT.2408 notes reference-white practice can vary with display peak; Xlibre's proposal intentionally uses 203 as an internal canonical scale, not a universal output-white setting.
 
