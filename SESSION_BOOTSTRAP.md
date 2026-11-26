@@ -285,3 +285,15 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - Additional migration regression test now seeds a temporary workspace with legacy-installed `.test.ts` / `.test.mjs` files and a registered test entry point, runs the real installer, and verifies those leftovers are removed while unrelated user plugin registrations survive.
 - Production `verifyOpencodePlugins` now reports stale test files/registrations, and `fixOpencodePlugins` cleans them. This avoids leaving a test plugin loaded in existing workspaces after upgrading the bootstrap binary.
 - PR #31 remains open/ready for review/not merged. PR #32 remains open/Draft/not merged with green exact-head CI run `45815962061`. Old PR #25 remains closed as superseded. No other branch refs were force-pushed.
+
+
+
+### Starfleetctl PR #31 merge and PR #32 replacement — 2026-11-26 12:55Z
+
+- PR #31 was merged after its targeted CI retry. Exact head `2466562ebb72ccda5953c2b8dfc3af6993d5af8a`; rerun attempt 2 of Actions run `45816648190` completed success. All three jobs passed: `build-test (stable)`, `build-test (1.22.x)`, and `plugin-typecheck`. Merge used GitHub's rebase method and produced master commit `c18352bb3269524294fda90d6d319ddef92098dd`.
+- PR #32 could not be updated in place without rewriting its published merge-based branch. Its branch and history remain unchanged; PR #32 was closed as superseded (not merged).
+- Created replacement branch `feat/comms-event-pipeline-rebased-2026-11-26` from the new master and replayed the event-pipeline tree as one commit `d23a8ca73f42a1634307222eb272b42f6bc3de35`. The resulting diff is 13 files. The old PR #32-only helper-list adjustment in `internal/bootstrap/checks_test.go` was intentionally not copied because PR #31's newer recursive discovery/parity tests supersede it. PR #29 explicit task-acceptance behavior and PR #31 bootstrap parity/migration tests remain in the base.
+- Opened [PR #33](https://github.com/mpbt-hq/starfleetctl/pull/33) as Draft, based on master `c18352bb3269524294fda90d6d319ddef92098dd`. Exact-head CI is running (Actions runs `45823658776` and `45823617833`); no CI result is claimed yet. Independent review and exact-head green CI are still required.
+- Current open PR inventory: only PR #33. PR #32 is closed as superseded; PR #31 and #29 are merged.
+- Duplicate historical refs `feat/comms-event-lifecycle` and `feat/comms-event-pipeline` still point to the superseded PR #23 tree `d161b1b81292d11c5f375684db05df1d59c7f9e1`; neither has unique lifecycle code. They were deliberately not rebased. Create the active issue #24 lifecycle branch from the resulting master only after PR #33 is merged. Preserve the old refs until then.
+- `feat/comms-event-pipeline-rebased` (old PR #32 head) and `feat/comms-event-pipeline-clean-history` (old PR #25 head) remain unchanged. Historical `backup/master-2026-11-07` remains untouched. No force-pushes, no local tests, and no ship restarts.
