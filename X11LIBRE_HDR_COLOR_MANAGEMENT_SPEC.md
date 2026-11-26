@@ -974,3 +974,59 @@ Hardware gamma LUT alone is not assumed to implement a complete HDR transform: i
 - Output hotplug, mode changes, clone topology and transform updates require atomic/synchronized state changes so a partially updated frame is never shown.
 
 Open design work includes the exact server/driver ownership boundary, KMS property discovery and capability model, transform implementation fallback, multi-output scanout lifecycle, per-plane behavior, direct-scanout policy, and tests. This is a design proposal only; it does not authorize implementation or freeze a protocol/API.
+
+
+## 28. Driver compatibility and proprietary NVIDIA (owner requirement)
+
+### 28.1 Compatibility is a correctness requirement
+
+**Owner requirement (2026-11-26): future HDR implementation must not break the proprietary NVIDIA Xorg driver.** The proprietary driver is not required to implement HDR. A configuration using that driver must retain a working, predictable legacy X11/SDR path when HDR capabilities are absent.
+
+This is a compatibility requirement, not a promise that every NVIDIA driver release or GPU combination has been tested. The proprietary NVIDIA DDX is external to this repository; its source and binary compatibility must be validated separately on supported target versions before claiming tested compatibility.
+
+### 28.2 Optional capability model
+
+- HDR and color-managed buffer handoff are optional capabilities, never prerequisites for starting the server, initializing a screen, creating a window, using Composite, or presenting ordinary SDR content.
+- Discover support at runtime from the actual active DDX, rendering backend, buffer formats and output path. Do not infer it from GPU vendor, PCI ID, EDID claims, presence of a DRM node, or a compile-time feature define alone.
+- A DDX/backend that cannot provide a requested capability must report it as unavailable. The extension must expose an explicit capability result and reject unsupported opt-in operations cleanly; it must not partially apply a transform or silently reinterpret pixels.
+- Clients/compositors that do not negotiate the new versioned contract retain existing protocol behavior and existing Composite pixmap semantics.
+- If the proprietary NVIDIA DDX does not implement the optional server/driver integration, it remains on the existing SDR path. HDR is not advertised as active on that path.
+
+### 28.3 Keep vendor DDXs outside the new mandatory dependency chain
+
+- Do not require the proprietary NVIDIA DDX to implement new callbacks merely to load or run.
+- Prefer implementation in private Xserver structures and optional, versioned capability interfaces. Avoid changing existing public driver SDK structures, callback signatures, module ABI contracts or established hook semantics.
+- If a new driver-facing hook is unavoidable, design its ABI/versioning and compatibility behavior explicitly before implementation. Do not assume that appending a field is automatically binary-compatible with already-built out-of-tree drivers; inspect the actual SDK/module ABI and reserved-field policy first.
+- Keep DRM/libdrm/GBM-specific output work inside the modesetting DDX or another backend that already owns those dependencies. Do not pull these dependencies into generic DIX/core code.
+- Do not introduce mandatory Vulkan headers/runtime, a higher global OpenGL baseline, or a new mandatory GPU API for HDR.
+- Do not change legacy Composite, DRI3, Present, RandR gamma, pixmap format/depth, or scanout behavior when the feature is not negotiated.
+
+### 28.4 Modesetting findings from current source
+
+The following observations were verified against `X11Libre/xserver:master` at `bb06f6ddca766c41c81494ae228c11e53df59590` (2026-11-26):
+
+- The inspected DRM/KMS implementation is the Xorg `modesetting` DDX under `hw/xfree86/drivers/video/modesetting/`; it is not evidence about the separate proprietary NVIDIA DDX.
+- Its CRTC property table currently includes `ACTIVE`, `MODE_ID`, `GAMMA_LUT`, `GAMMA_LUT_SIZE` and `CTM`. No `DEGAMMA_LUT` property handling was found in that CRTC property model.
+- CRTC properties are discovered from the actual DRM CRTC with `drmModeObjectGetProperties()`. `use_gamma_lut` is enabled only when a nonzero `GAMMA_LUT_SIZE` is reported; the default policy accepts sizes up to 4096, with the existing `UseGammaLUT` option as an override. Otherwise the legacy `drmModeCrtcSetGamma()` path is used.
+- The gamma LUT is a 1D per-channel `drm_color_lut`; CTM is a separate 3x3 DRM color transform. This is not a complete HDR pipeline and does not establish support for PQ encoding, tone mapping, 3D gamut mapping, or final-frame HDR metadata.
+- The existing CTM path is gated by gamma-LUT use and property presence. The atomic modeset request inspected here configures CRTC active/mode and primary-plane framebuffer geometry; it does not currently include a full HDR color-pipeline state bundle. Do not treat the current gamma/CTM support as an HDR implementation.
+- Present page-flip eligibility checks that the buffer format/modifier is supported by every active CRTC. The current path can flip a full-screen window/framebuffer; a transformed format that is not accepted by all active CRTCs can disable that flip path. This reinforces that format negotiation and output transforms must be optional and preserve the ordinary scanout format.
+- Hardware cursors are programmed through separate cursor operations, not through the primary framebuffer's pixel transform. The modesetting Present path also has separate flip eligibility logic and refuses some flips when sprites/overlays are visible. Cursor, overlay and video-plane color behavior therefore needs independent treatment.
+- The modesetting DDX has a shared screen pixmap and per-CRTC scanout state; its reverse-PRIME path tracks per-CRTC scanout pixmaps. This is not yet proof that arbitrary output-specific shader buffers can be introduced safely. Multi-CRTC, clone, PRIME and hotplug behavior require dedicated tests.
+
+### 28.5 NVIDIA-specific validation plan
+
+Before enabling HDR by default or changing driver-facing interfaces, validate at least:
+
+1. Proprietary NVIDIA DDX starts the server and supports ordinary SDR clients with the HDR feature compiled in but unnegotiated.
+2. Composite redirection/name-pixmap, Damage, Present copy/flip, DRI3 import/export and RandR mode changes retain their legacy behavior.
+3. No new driver callback is required; capability discovery reports no HDR support where the DDX/backend cannot provide it.
+4. Missing DRM/KMS color properties, unsupported formats/modifiers, unavailable Glamor/GBM and unavailable optional shader features all lead to a clean SDR fallback, not server failure or corrupted output.
+5. The same server build still works with the modesetting DDX, with and without optional HDR/KMS properties.
+6. Build/package dependency checks confirm that generic Xserver and proprietary-driver loading do not acquire mandatory Vulkan, GBM, or higher OpenGL requirements from the HDR work.
+
+Test on real proprietary NVIDIA driver versions and supported GPU generations. Until that is done, report NVIDIA compatibility as a design constraint and unverified test target, not as a tested fact.
+
+### 28.6 Implementation gate
+
+No HDR path may become mandatory for server startup or legacy rendering. The first implementation must be opt-in, capability-gated, and independently disableable, with a demonstrably unchanged legacy path. Any proposed public driver ABI change requires a separate owner-reviewed compatibility plan. This section records a compatibility requirement; it does not authorize implementation.
