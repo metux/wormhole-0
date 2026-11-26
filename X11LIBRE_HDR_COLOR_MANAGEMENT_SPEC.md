@@ -1,6 +1,6 @@
 # X11Libre HDR and Color Management — Design Specification
 
-**Status:** Working draft (2026-11-26); not normative / not implementation authorization  
+**Status:** Working design draft with owner-approved architecture decisions (2026-11-26); not a frozen wire ABI / not implementation authorization  
 **Scope:** X11Libre X server HDR and color management  
 **Primary implementation target:** `X11Libre/xserver:master`  
 **Design authority:** owner decisions plus this document once explicitly approved  
@@ -798,3 +798,51 @@ The pixel format states whether an alpha channel exists and how it is stored. Th
 8. Define the policy for NaN/infinity values in client-provided floating-point buffers.
 
 Section 24 is a design recommendation, not yet an owner-approved normative ABI. No Xserver implementation is authorized by this section.
+
+
+## 25. Legacy unmanaged SDR source policy (owner-approved design direction)
+
+### 25.1 Implicit source description
+
+When a compositor has explicitly negotiated the color-managed handoff, every redirected window must be represented in the common working space. A window with no explicit Color Description therefore receives a deterministic implicit legacy profile:
+
+- primaries: sRGB / ITU-R BT.709 primaries;
+- white point: D65;
+- transfer function: IEC 61966-2-1 sRGB;
+- reference white: the session-wide `LegacySDRReferenceWhite` setting;
+- no per-output adaptation or monitor-dependent scaling in the per-window transform.
+
+The implicit profile applies only to windows without explicit color metadata. An explicit, valid Color Description takes precedence and is not overridden by this legacy setting.
+
+### 25.2 Default and rationale
+
+**Default: 80 cd/m².** This follows the conventional sRGB reference-viewing assumption, under which sRGB white is represented at 80 cd/m². It is not a claim about the physical peak luminance of the connected monitor.
+
+The common working-space scale remains unchanged: neutral working-space RGB 1.0 is 203 cd/m². Consequently, an implicit legacy sRGB white at the default setting maps to neutral working-space RGB approximately 80/203 = 0.3941. If the session setting is 203 cd/m², legacy SDR white maps to working-space RGB 1.0.
+
+This distinction is intentional:
+- 80 cd/m² is the conventional sRGB reference-viewing white.
+- 203 cd/m² is the HDR reference / graphics white used by the selected common working-space scale.
+- The user or session policy may choose to raise legacy SDR white (for example, to 100 or 203 cd/m²) to suit an HDR desktop environment.
+
+The choice of 80 cd/m² as the default is supported by the sRGB reference-viewing assumptions described in the W3C CSS Color HDR draft and by the corresponding sRGB defaults in the Wayland color-management protocol. Those are references for luminance semantics, not protocol dependencies.
+
+### 25.3 Configuration scope and behavior
+
+The setting is a single session/server-wide luminance value, expressed in cd/m². Its exact configuration interface and validated range remain **OPEN**; candidate sources include an X server configuration option or a session policy exposed through the future color-management extension.
+
+The setting must not be per-output. A window spanning multiple monitors or moving between them must retain the same source-to-working-space values.
+
+If runtime changes are supported, changing the setting invalidates and regenerates the complete transformed content of every affected legacy window. The server must publish a new transformed-buffer generation only when its contents are complete and synchronized. A partial mixture of old and new reference-white mappings is not valid.
+
+Explicit per-window Color Descriptions remain authoritative. Changing the legacy setting must not alter explicitly described windows.
+
+### 25.4 Owner decisions recorded
+
+The owner approves the following design direction:
+1. Keep the common working space as output-independent linear BT.2020 / D65 with 1.0 = 203 cd/m².
+2. Use negotiated RGBA FP16 for the transformed compositor handoff, with linear premultiplied alpha; capability negotiation and a defined fallback remain required.
+3. Interpret unmanaged legacy windows as sRGB/D65 and use a session-wide configurable reference-white value, defaulting to 80 cd/m².
+4. Keep that setting independent of output/monitor; explicit Color Descriptions override it.
+
+Still open: exact configuration interface/range, chromatic-adaptation method, HLG absolute-luminance assumptions, non-finite floating-point input policy, and the final wire ABI / compositor handoff protocol. These decisions do not authorize Xserver implementation.
