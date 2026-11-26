@@ -439,6 +439,31 @@ Relevant source paths:
 
 This investigation is a source review only. No Xserver code, build, runtime or test changes were made as part of this draft.
 
+### 16.2 Composite protocol lifetime and transformed-buffer representation
+
+The Composite protocol documentation adds an important lifecycle constraint: `NameWindowPixmap` returns a reference to the off-screen storage; the window receives a new pixmap when it is mapped or resized, while the old named pixmap remains allocated until the client frees it. A compositor must name the new storage again after those lifecycle events. This matches the Xserver implementation's explicit pixmap reference in `SingleCompositeNameWindowPixmap()`.
+
+Consequences for this design:
+
+1. A transformed compositor-facing buffer must have an explicit generation/lifetime tied to the corresponding redirected-window storage generation.
+2. On resize/remap, the server must create/prepare a new transformed generation. The old generation must remain valid while the compositor still holds a reference, then be released safely.
+3. The server must not silently mutate an old named pixmap to represent a different window-storage generation or dimensions.
+4. The compositor needs an unambiguous notification/update path telling it when to release the old named resource and acquire the new transformed representation. Existing Configure/Map and Damage behavior may help, but the exact ordering must be verified.
+5. Present pageflip behavior must be analyzed separately from the Composite map/resize generation rule. A Present pixmap swap is not automatically equivalent to a Composite resize/remap event.
+
+There is also a format/API issue. The legacy CompositeNameWindowPixmap request returns a normal X Pixmap resource representing the window's off-screen storage. A high-precision linear working buffer may require a representation (for example FP16 RGBA) that is not expressible as an ordinary legacy X pixmap with the window's original depth/bpp. Merely returning a different internal PixmapPtr from the existing request risks violating established depth/format expectations and does not provide the compositor with a reliable color-space descriptor.
+
+Therefore, the preferred direction for investigation is a **versioned color-managed Composite handoff** that returns or names a transformed buffer together with:
+- an explicit pixel format / DRM fourcc and modifier where applicable;
+- dimensions and plane/stride/offset information;
+- an immutable working-space identifier/description;
+- synchronization primitives or a defined fence protocol;
+- a generation identifier and lifetime/release semantics.
+
+This could be implemented as a new X extension or an explicitly negotiated Composite extension revision. The exact transport (X Pixmap resource, DRI3 FD(s), or another server-owned buffer handle) remains **OPEN**. The legacy Composite request and legacy compositor behavior must remain unchanged unless the client explicitly negotiates the color-managed handoff.
+
+Reference: Composite protocol/API documentation states that a new pixmap is created when a window is mapped or resized and that the old pixmap remains allocated until freed. See https://manpages.debian.org/unstable/libxcomposite-dev/XCompositeNameWindowPixmap.3.en.html and the Composite protocol text at https://sources.debian.org/src/xorgproto/2018.4-4/compositeproto.txt.
+
 ### 16.1 Damage migration and Composite resource identity
 
 A more detailed read of `miext/damage/damage.c` establishes two useful facts:
