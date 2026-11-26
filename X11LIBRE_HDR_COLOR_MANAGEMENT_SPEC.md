@@ -893,7 +893,7 @@ For a relative-colorimetric RGB source with a valid Color Description:
 3. Convert linear source RGB to normalized source XYZ using the matrix derived from its declared primaries and white point.
 4. Apply full linear Bradford adaptation from the source white point to D65, unless the source white is already D65.
 5. Convert D65 XYZ to linear BT.2020 RGB.
-6. Apply the source reference-white / absolute-luminance scale and divide by 203 cd/m² to express the result in Xlibre Linear BT.2020 / 203. The exact placement of this scalar relative to the linear matrices is mathematically interchangeable, but the implementation must use one defined convention and preserve absolute luminance.
+6. Resolve luminance semantics before scaling into the working space: for relative SDR encodings (including sRGB), multiply the normalized linear XYZ values by the Color Description's reference-white luminance in cd/m²; for PQ, the decoded values already represent absolute luminance and must not be multiplied by the reference-white value; for an absolute-colorimetric XYZ/PCS source, preserve its supplied absolute scale. Then divide XYZ by 203 cd/m² to express it on the common working-space scale. A linear scalar commutes with the CAT and RGB/XYZ matrices, but the implementation must use one defined convention and preserve absolute luminance.
 7. Premultiply the resulting linear working RGB by linear alpha and write RGBA FP16. Do not clamp gamut excursions or values above 1.0.
 
 The implementation may combine steps 3–6 into a precomputed 3x3 matrix plus scalar for a given immutable Color Description. Such optimization must be numerically equivalent to the specified order and must not change semantics.
