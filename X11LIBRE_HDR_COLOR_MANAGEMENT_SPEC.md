@@ -1838,7 +1838,7 @@ Current Xserver `master` was rechecked at `d439c01fef4c8dcb3a0d05471e3edb0eb00f6
 - `ClientRec` contains `req_fds`. Xtrans queues ancillary FDs received with the request; `ReadFdFromClient()` decrements `req_fds` and obtains the next queued FD.
 - Existing `SetReqFds(client, n)` only logs when a nonzero existing count differs, then overwrites `client->req_fds`. It is not a strict validation API.
 - After request dispatch, `os/io.c` drains and closes any unused request FDs. Thus an extension must not rely on the generic cleanup to detect an over-supplied FD list.
-- Before calling `SetReqFds()`, the new request handler must compare the actual received `client->req_fds` against the request's declared `fd_count`; mismatch is a protocol error. Then set/consume exactly that count and verify all expected descriptors were received. This is especially important for ReleaseBuffer: NO_USE with an unexpected FD must never be treated as a valid no-read release.
+- The current `client->req_fds` counter is not the actual received count; see the correction and request-boundary accounting requirement in section 30.19. A handler cannot validate excess ancillary FDs using this counter alone.
 - This is a new extension-handler requirement; do not change legacy DRI3/SHM behavior as part of this design note.
 
 ### Newly discovered Xtrans reliability blocker
@@ -1858,3 +1858,20 @@ This means the current return value of `WriteFdToClient()` is not a sufficient p
 The current xcb-proto `present.xml` uses `xge="true"` for variable-size notifications and CARD64 fields (with explicit start alignment where needed). The proposed BufferReady/BufferInvalidated/StreamError events can therefore use ordinary XGE event declarations; no special eventstruct is required. Their exact event fields and alignment still need generator validation.
 
 No source code or tests were changed. No transport patch or implementation was authorized.
+
+
+
+## 30.19 — Correction: ancillary FD counts are not currently request-scoped
+
+A closer trace of `os/io.c`, `ReadFdFromClient()`, `dix/dixstruct_priv.h` and `os/Xtranssock.c` refines the strict-count proposal in 30.18:
+
+- `ClientRec.req_fds` is a remaining-to-consume counter set by `SetReqFds()`; it is not the number of ancillary FDs actually received for the current request.
+- Xtrans currently queues received FDs on the connection-level `recv_fds` list. The socket `recvmsg()` path appends descriptors as they arrive, but the queue does not retain an association with the byte offset / X request that carried each descriptor.
+- `ReadFdFromClient()` decrements the expected counter and pops the next connection-queued FD. The post-dispatch cleanup drains only descriptors still counted as expected-but-unconsumed. It does not provide a reliable count of excess FDs supplied with a request.
+- Therefore, the earlier wording suggesting that a request handler can compare `client->req_fds` with the declared `fd_count` was incorrect. That comparison cannot establish the actual ancillary count and must not be used as a security check.
+
+**Required Xtrans design prerequisite:** incoming ancillary FDs need request-boundary accounting. Xtrans must preserve enough stream-position/batch information to associate each received FD with the X request bytes it accompanied, expose the exact count for the current request, reject or close excess FDs at that request boundary, and fail the connection/request on allocation or association failure. The extension handler can then validate declared count against the transport-reported actual count before consuming descriptors.
+
+This strengthens the 30.18 blocker: reliable FD handoff requires both (a) send-side queue allocation/ownership errors to propagate and (b) receive-side ancillary FDs to be associated with exact request boundaries and counted. Merely adding extension-level checks around the current `req_fds` counter is insufficient.
+
+No source code or tests were changed.
