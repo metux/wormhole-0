@@ -1371,3 +1371,146 @@ A possible conceptual split is `release_buffer(..., consumer_release_sync)` to r
 - Keep the existing NVIDIA requirement unchanged: no HDR provider is required, and no new mandatory DDX callback or `ScreenRec` field is introduced.
 
 No Xserver source code has been changed. This remains a design proposal; implementation is not authorized by this subsection.
+
+
+### 30.11 Buffer-generation state machine and compositor synchronization
+
+This subsection defines the proposed v1 lifecycle more precisely. It is a design proposal, not a frozen wire protocol or implementation authorization. It was checked against Xserver master HEAD `f6df545643f02d04d06ac08f7c81f4da05f7c4cc`. The implementation facts in 30.10 remain useful, but this newer HEAD is the source baseline for future implementation work.
+
+#### Two distinct lifetimes
+
+Do not model a window generation and a physical allocation as one state machine:
+
+- A **content generation** identifies one immutable transformed image of one window at one source sequence, dimensions, and Color Description revision. It is identified by a monotonically increasing generation number within a negotiated client/screen epoch.
+- A **physical color buffer** is a Glamor-owned allocation that may be reused for a later content generation only after every consumer lease has been safely released. A physical allocation may outlive the content generation that first used it, and a content generation may be retired while its allocation is still waiting for GPU completion.
+
+Core stores logical identifiers, state, references, and source sequence numbers only. Glamor stores the physical allocation and GPU objects. The modesetting provider correlates the two and owns the backend lifecycle. Generation identifiers must never be reused within an epoch; reconnect or renegotiation creates a new epoch so delayed messages cannot release a newer buffer accidentally.
+
+#### Content-generation states
+
+The proposed state progression is:
+
+```text
+DIRTY
+  -> SOURCE_SNAPSHOTTED
+  -> TRANSFORM_QUEUED
+  -> TRANSFORM_COMPLETE
+  -> EXPORT_READY
+  -> PUBLISHED / COMPOSITOR_LEASED
+  -> RELEASE_RECEIVED
+  -> BACKEND_RELEASE_QUEUED
+  -> RETIRED
+```
+
+Meaning and rules:
+
+1. **DIRTY** — Damage, Present buffer replacement, resize, or Color Description change has advanced the window's source sequence. Multiple updates may be coalesced.
+2. **SOURCE_SNAPSHOTTED** — The server has retained the exact source pixmap/backing generation and immutable Color Description revision for this job. The source object must remain alive until the transform has finished reading it.
+3. **TRANSFORM_QUEUED** — Glamor has queued the complete transform into a private destination allocation. The job carries the source producer/acquire synchronization required for the exact source generation. Damage notification alone is not proof that an external DRI3/Present producer has finished writing.
+4. **TRANSFORM_COMPLETE** — The destination writes are ordered before a producer native fence. The producer fence is exported only after the transform commands have been flushed. No further writes to this destination are allowed.
+5. **EXPORT_READY** — The complete descriptor and independently owned plane FDs are prepared. The descriptor includes FourCC, modifier, dimensions, plane count and per-plane FD/stride/offset. The producer fence FD is associated with this exact generation.
+6. **PUBLISHED / COMPOSITOR_LEASED** — The extension has successfully sent the descriptor and producer fence to the negotiated compositor. From this point, assume the compositor may sample the buffer at any time. The server must not modify or recycle it until a matching release arrives. A failed send before publication closes all duplicated handoff FDs and leaves the generation unpublished.
+7. **RELEASE_RECEIVED** — The compositor has sent exactly one release for this lease, with a release fence FD that covers all GPU reads it submitted for this generation. The server validates client/epoch/window/generation identity and rejects duplicate, stale, or mismatched releases.
+8. **BACKEND_RELEASE_QUEUED** — Glamor has successfully imported the release fence and queued a GPU-side wait in the same serialized context/queue that will perform subsequent writes to the allocation. Later writes in that queue are therefore ordered after the compositor reads. Only now may the allocation return to the reusable pool. This state means safe ordering has been established; it does not claim the GPU has already become idle.
+9. **RETIRED** — Core has dropped the logical generation and all its references. The physical allocation may already have been reused for a newer generation or may be destroyed separately.
+
+A generation that is superseded before publication is never sent. Its queued transform must still be completed or safely cancelled before its destination is reused/destroyed. If a newer source sequence appears while an older transform is running, the older result is discarded after backend completion and only the latest source sequence is scheduled. Do not publish an already-obsolete intermediate image merely because its transform finished first.
+
+#### Physical-buffer states
+
+A physical Glamor allocation has its own lifecycle:
+
+```text
+ALLOCATED
+  -> WRITING
+  -> SEALED
+  -> EXPORTED
+  -> LEASED
+  -> RELEASE_FENCE_PENDING
+  -> REUSE_ORDERED
+  -> WRITING                 (next generation)
+```
+
+Alternative terminal path:
+
+```text
+RELEASE_FENCE_PENDING
+  -> DESTROY_PENDING
+  -> GPU_SAFE_TO_DESTROY
+  -> DESTROYED
+```
+
+- **ALLOCATED:** storage, EGLImage/texture/FBO and export metadata exist, but no generation is being written.
+- **WRITING:** one transform owns the allocation exclusively. No compositor lease may exist.
+- **SEALED:** transform writes are complete and a producer fence has been exported. The allocation is immutable.
+- **EXPORTED:** descriptor FDs are duplicated and ready for one handoff.
+- **LEASED:** the compositor has received the handoff; the allocation is immutable and unavailable to the pool.
+- **RELEASE_FENCE_PENDING:** release was received but not yet imported/ordered by Glamor. It is still unavailable.
+- **REUSE_ORDERED:** Glamor has queued the release wait in the same ordered GPU context. A subsequent write may be queued behind that wait; no CPU-side busy wait is required for normal reuse.
+- **DESTROY_PENDING:** no new generation may use this allocation. Destruction waits for any submitted server and consumer work to become safe.
+- **GPU_SAFE_TO_DESTROY / DESTROYED:** the backend has established safe destruction and released EGL/GBM/FD resources.
+
+The v1 implementation must serialize operations that touch the Glamor context. A wait queued in one context does not order writes issued from an unrelated context or queue. If future multi-context rendering is added, the release dependency must be propagated to every writer queue before reuse.
+
+#### Producer and consumer fence protocol
+
+Use explicit native-fence FD synchronization for the first implementation, and advertise the negotiated mode only if both directions work end-to-end.
+
+**Producer side (Xserver/Glamor → compositor):**
+
+1. Wait/order any source acquire dependency before sampling the source. For Xserver-rendered sources, use the actual Glamor command ordering; for externally produced DRI3/Present buffers, consume the producer synchronization associated with that source generation. Do not infer completion from Damage or a Present event alone.
+2. Queue the source-to-working-space transform and all writes to the destination.
+3. Create/export the native fence after those writes and flush the GL command stream. The existing `glamor_egl_flush_fence_fd()` follows the create-fence, `glFlush()`, duplicate-FD pattern and is a starting point.
+4. Send the producer fence FD together with the buffer descriptor. The compositor must wait on it before any sampling. Each handoff receives its own FD; close the server's transfer copy after the X transport has duplicated/transferred it according to the transport's defined FD-passing semantics.
+
+**Consumer side (compositor → Xserver/Glamor):**
+
+1. The compositor waits on the producer fence before sampling.
+2. After submitting its final GPU read of the buffer, the compositor creates a release fence that covers every queue/context that accessed the buffer. It sends that fence with the exact window, epoch and generation identifiers.
+3. The server imports the received release fence into Glamor and queues a GPU-side wait before any subsequent write to that physical allocation. A successfully imported FD's ownership follows the native-fence EGL API contract; failure must leave the FD under explicit server cleanup and must not transition the buffer to reusable.
+4. Only after the backend confirms that the wait was successfully queued may the allocation become eligible for reuse.
+
+The implementation must verify the exact EGL extensions and entry points for native-fence import/export and server-side wait (including the relevant native-fence and EGL wait-sync support). The current producer helper only demonstrates fence export. The current DRI3 timeline-syncobj probe is not evidence that this protocol works. Do not silently substitute implicit synchronization or a CPU-blocking wait when an advertised explicit path fails.
+
+If native-fence import or server-side wait is unavailable, the v1 compositor HDR handoff is unsupported on that screen. A future alternative may use a fully specified syncobj protocol or an event-driven completion path, but it requires a separate capability and design. A blocking CPU wait is not the normal fallback because it can stall the Xserver event loop.
+
+#### Publication, FDs, and generation identity
+
+- The extension negotiates a protocol version and synchronization mode before any buffer is exported. Capability means the complete path, not just individual EGL extensions.
+- Every publication is keyed by (client connection epoch, screen, window, content generation). The server rejects releases from another client, old epoch, wrong window, unknown generation, or already released lease.
+- The server sends duplicated DMA-BUF plane FDs and one producer-fence FD. The receiver owns the received descriptors after successful transport receipt and closes them after import/use according to its own API. Neither side may close or reuse the other side's FD number; FD numbers are process-local.
+- The compositor returns one release fence per published lease, after its final read. If it did not submit any GPU read, it must still return an explicit no-use release defined by the wire protocol; absence of a release is never interpreted as completion.
+- A generation is immutable once published. If content changes, allocate/use another physical buffer and publish a new generation. The old generation remains leased until release. Do not update an exported buffer in place, even if the compositor claims it is currently idle.
+- All partial plane-FD exports are rolled back on failure. The implementation closes every FD it still owns, destroys or quarantines the un-published allocation as appropriate, and never emits a partially valid descriptor.
+- A release must be idempotently rejected after the first accepted release; duplicate messages must not double-free an allocation or decrement a lease count twice.
+
+#### Backpressure, damage coalescing, and failure handling
+
+- Bound the number and total size of physical buffers and outstanding compositor leases per screen/client/window. The pool must not grow without limit if the compositor stops releasing buffers.
+- When no reusable buffer exists, do not block the Xserver event loop and do not overwrite a leased buffer. Mark the window dirty, coalesce subsequent Damage/Present updates, and schedule only the latest source sequence when a buffer becomes available.
+- Prefer a small bounded pool (initially two or three buffers per actively updated window, subject to memory budgeting) but make the exact count configurable/derived from memory pressure rather than a protocol guarantee. If the pool limit is reached, preserve the last valid published generation and report/defer the pending update; do not silently publish stale or partially transformed pixels.
+- If allocation, transform, fence export, descriptor export, or publication fails before handoff, the generation is not published. Close owned FDs and safely recycle/destroy its destination only after submitted GPU work is known complete.
+- If release-fence import/wait fails after handoff, mark the physical allocation quarantined and never reuse it. Disable HDR handoff for the affected screen/client as appropriate, report the failure, and retain or destroy the resource only through a proven safe teardown path.
+- If the compositor disconnects or renegotiates while buffers are leased, invalidate that client's epoch and stop new publication. Do not reuse leased buffers merely because the X connection closed. Mark them orphaned: stop server writes, drop server-side references only after local GPU work is safe, and let kernel DMA-BUF references held by the consumer/driver drain independently. A later connection receives a new epoch and cannot release old generations.
+- If a live compositor never releases a buffer, retain it as leased and apply bounded backpressure. A timeout is a diagnostic/recovery trigger, never proof that GPU reads have finished.
+- During screen close/hot-unplug, stop new jobs, invalidate publication, quiesce the server's own GPU work, unregister the provider, and only then tear down Glamor/GBM. Outstanding consumer leases must not cause use-after-free callbacks into an unloaded module. Resources that cannot be proven safe for reuse are destroyed/quarantined, never recycled.
+
+#### Initial v1 simplification
+
+To reduce correctness risk, v1 should transform a complete window image into a fresh private destination for each published content generation. Damage updates may be coalesced before a job starts, but partial destination updates/copy-forward are deferred until the full generation and release protocol is proven. This avoids dependence on uninitialized regions, old-generation copies, or writing into storage still sampled by the compositor. A later optimization can add copy-on-write or partial updates without changing the generation identity contract.
+
+#### Consequences for the internal provider API
+
+Section 30.3's illustrative table must be extended/reworked before implementation. At minimum it needs distinct operations with explicit ownership semantics for:
+
+- source readiness/acquire synchronization;
+- allocation and transform submission;
+- completion-fence export and buffer descriptor export;
+- compositor release-fence import/queue-wait;
+- returning a safely ordered allocation to the pool;
+- destroying an allocation after all server/consumer use is safe;
+- screen/provider quiesce and teardown.
+
+Do not combine compositor release with physical destruction in one ambiguous `release_buffer()` callback. A release makes an allocation reusable only after the release dependency is imported and ordered; destruction is a separate terminal operation. Core must never inspect or own EGL/GBM handles or fence implementation details.
+
+No Xserver source code has been changed. No implementation authorization is implied by this lifecycle proposal.
