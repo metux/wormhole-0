@@ -145,3 +145,14 @@ Further lifecycle finding from the 2026-11-26 source review:
 - Therefore, the likely prototype shape is a window-attached Damage observer plus a separate stable transformed Pixmap object for the compositor, but this remains a hypothesis until Composite protocol semantics, resize handling and actual compositor re-name behavior are verified.
 
 The detailed analysis is recorded in section 16.1 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md` (latest follow-up commit `2cd6b5781e61594cea9a99750eea87341e16fc3f`). No Xserver source was changed.
+
+
+Composite protocol lifetime and format implications were then added to section 16.2 of `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md` (commit `a9aab868e0189293b0de5cbffbdbcebf38e03a46`):
+
+- CompositeNameWindowPixmap names a reference to the current off-screen storage. A new pixmap is allocated when a window is mapped or resized; the old named pixmap remains allocated until freed. Compositors must reacquire the current pixmap after those lifecycle changes.
+- A transformed buffer therefore needs a generation/lifetime corresponding to redirected-window storage. Old transformed generations must remain valid while held by compositor references.
+- A linear/high-precision working buffer (e.g. FP16 RGBA) may not be representable as an ordinary legacy X pixmap with the window's original depth/bpp. Returning a different PixmapPtr through the legacy request is not sufficient unless format and color-space semantics are preserved.
+- The preferred investigation direction is a versioned color-managed Composite handoff that exposes the transformed buffer plus format/modifier, dimensions/planes, working-space description, synchronization and generation/lifetime semantics. Transport (X pixmap, DRI3 FD(s), or another handle) remains open.
+- Legacy Composite semantics should remain unchanged unless the compositor explicitly negotiates the color-managed handoff.
+
+The external Composite API documentation and protocol text were consulted; this is design evidence, not yet a full audit of all compositor implementations. No implementation changes were made.
