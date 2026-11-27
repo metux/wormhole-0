@@ -740,3 +740,15 @@ Checked current `os/io.c` `ReadRequestFromClient()` against master `21d70661f216
 - #4232 head `909a70fd4b4d03a29a60edeb24dd26cff290b31b`: `appendFd()` remains only in the send path (`_XSERVTransSocketSendFd()`); receive path uses `appendRecvFd()` so allocation failure can be reported without conflating FD ownership. Added a test that verifies an unconsumed received FD is closed by local Xtrans connection teardown. Exact-head run `46022152207` pending.
 - Existing DIX request-end cleanup was inspected: `ReadRequestFromClient()` drains `client->req_fds` through `ReadFdFromClient()` and closes those FDs. This is separate from Xtrans connection teardown. The new test covers the latter; DIX request-completion cleanup is source-reviewed only and remains unchanged.
 - Both PRs are Draft/open/unmerged. No local Xserver build/test has been run.
+
+
+## 2026-11-27 15:16Z — Rebase remaining HDR/Xtrans PRs and review
+
+Xserver master: `325ba5ebb80ed97bb5387ec7b6f69d38bc40f8bb`.
+
+- #4230 rebased as one signed-off commit: `ac72f4d7dcfdfc6a6e4d2922a28e2cc3db4e3cdb`. Its new test functions now follow the owner-wide Xserver C style (same-line return type/name; braces on control flow). Exact-head run `46023298662` pending.
+- #4231: `6cd70b3a33f0b934f1dc492b158b3fa91ea0fa3e`; immediate receive-queue cleanup on MSG_CTRUNC, regression with a prior queued FD. Run `46022322395` queued/in progress.
+- #4232: `909a70fd4b4d03a29a60edeb24dd26cff290b31b`; receive-only allocation failure and count, plus connection-close cleanup regression. `appendFd()` remains send-only; `appendRecvFd()` is receive-specific. Run `46022152207` queued/in progress.
+- #4240 rebased as one signed-off commit: `2019df16d73b7061a8fff8b2791803e5ec355bad`. Applied C style to new/modified helper definitions and CTA iteration loop; fixed `xf86ParseEDID()` parameter docs. Exact-head run `46023127915` queued.
+- #4240 appends `rawDataLen` to public `xf86Monitor`; existing offsets are preserved but structure size changes. Inspect the ABI-check workflow result before deciding readiness.
+- All four PRs remain Draft/open/unmerged. No local Xserver build/test claimed. Detailed status and technical review notes are in spec section 30.35.
