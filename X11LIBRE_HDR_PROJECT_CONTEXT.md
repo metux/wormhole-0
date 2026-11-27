@@ -732,7 +732,7 @@ Correction to the 14:15Z checkpoint: because #4231 is generic MSG_CTRUNC hardeni
 Checked current `os/io.c` `ReadRequestFromClient()` against master `21d70661f216140a6080882b01d2d7bbf20191e4`: after `_XSERVTransRead()`, only would-block errors are converted into a normal not-ready/yield path. Any other negative read result returns `-1` to the request-processing layer. Therefore the `EMSGSIZE` from #4231 and `ENOMEM` from #4232 are fatal read errors, not conditions under which the server continues parsing later requests with a partial FD queue. This confirms the fail-closed behavior expected by both receive-side changes. Source review only; no runtime test or local build claimed.
 
 
-## 2026-11-27 16:0xZ — Xtrans FD cleanup and style review
+## 2026-11-27 15:03Z — Xtrans FD cleanup and style review
 
 - Applied the durable Xserver C conventions from `decisions/2026-11-27--xserver-coding-style.md` to new code in #4231/#4232: variables close to first use where practical, braced control flow, and return type/function name on one line.
 - Xserver master advanced to `325ba5ebb80ed97bb5387ec7b6f69d38bc40f8bb` after #4233. Both PR branches were reconstructed directly on this master as single-commit branches.
