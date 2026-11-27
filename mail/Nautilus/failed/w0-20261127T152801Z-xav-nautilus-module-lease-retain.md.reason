@@ -1,0 +1,6 @@
+message: w0-20261127T152801Z-xav-nautilus-module-lease-retain.md
+mailbox: Nautilus
+from: new
+failed_at: 2026-11-27T15:27:37Z
+reason: invalid message front matter: yaml: unmarshal errors:
+  line 7: field task_id not found in type wormhole.Message
