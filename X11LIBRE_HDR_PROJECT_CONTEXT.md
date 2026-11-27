@@ -725,3 +725,8 @@ Correction to the 14:15Z checkpoint: because #4231 is generic MSG_CTRUNC hardeni
 - #4232 new head `466677ef815294c1a43f56a02def3b02e70c3217`, base same master `21d70661f216140a6080882b01d2d7bbf20191e4`; one signed-off commit. The diff is only the per-read FD count, receive queue allocation failure handling and registered tests. It does not contain #4231's MSG_CTRUNC change and has no PR dependency.
 - #4232 exact-head Actions run `46013779628` is pending; #4231 run `46012395834` queued; #4233 run `46011658495` queued.
 - All remain Draft/open/unmerged. No local build/test claimed.
+
+
+## 2026-11-27 14:25Z — DIX handling of receive-side transport failures
+
+Checked current `os/io.c` `ReadRequestFromClient()` against master `21d70661f216140a6080882b01d2d7bbf20191e4`: after `_XSERVTransRead()`, only would-block errors are converted into a normal not-ready/yield path. Any other negative read result returns `-1` to the request-processing layer. Therefore the `EMSGSIZE` from #4231 and `ENOMEM` from #4232 are fatal read errors, not conditions under which the server continues parsing later requests with a partial FD queue. This confirms the fail-closed behavior expected by both receive-side changes. Source review only; no runtime test or local build claimed.
