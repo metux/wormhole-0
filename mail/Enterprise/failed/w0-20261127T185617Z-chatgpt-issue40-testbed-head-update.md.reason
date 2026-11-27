@@ -1,0 +1,6 @@
+message: w0-20261127T185617Z-chatgpt-issue40-testbed-head-update.md
+mailbox: Enterprise
+from: new
+failed_at: 2026-11-27T18:55:31Z
+reason: invalid message front matter: yaml: unmarshal errors:
+  line 7: field supersedes not found in type wormhole.Message
