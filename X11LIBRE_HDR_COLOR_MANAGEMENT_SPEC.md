@@ -2250,3 +2250,14 @@ The owner reviewed the scope of PRs #4231 and #4232 and requested that they cont
 - Owner rebased #4233 onto this master. Exact head `d42037bb87537b3592a65eb897e0e08d430a04a2` changes only the `check-sign-off` job permission to `pull-requests: write`; the permission remains job-scoped. Exact-head run `46011658495` was queued at the last check.
 - #4230 and #4240 still have their earlier base `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89` and need rebase/current-head CI refresh before merge consideration.
 - All these PRs remain Draft/open/unmerged. Do not treat queued runs or prior-head green runs as current validation.
+
+
+## 30.32 — #4232 unstacked from the generic MSG_CTRUNC fix
+
+**Supersedes the #4232 parent/head relationship stated in section 30.31.** After deciding that #4231 is useful generic hardening but not a strict HDR prerequisite, #4232 was rebased directly onto current Xserver master so the two changes can be reviewed and merged independently.
+
+- #4231 remains at `4bb84c5e5fa9e9dc60a113d3c60149205a269fa7`, based on master `21d70661f216140a6080882b01d2d7bbf20191e4`.
+- #4232 is now at `466677ef815294c1a43f56a02def3b02e70c3217`, also based directly on the same master. Its diff contains only the per-read FD count, receive queue allocation failure handling and registered tests. It does not contain #4231's `MSG_CTRUNC` handling and has no dependency on #4231.
+- #4232 exact-head Actions run `46013779628` was pending at the last check; #4231 run `46012395834` was queued.
+- #4233 remains rebased to the same master at `d42037bb87537b3592a65eb897e0e08d430a04a2`; run `46011658495` queued.
+- All remain Draft/open/unmerged. No local build/test is claimed.
