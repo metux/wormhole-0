@@ -383,3 +383,9 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - Latest exact-head Actions run `46006375493` / run 584: plugin typecheck and all plugin tests passed; Go build and vet passed on both Go 1.22 and stable; full Go test legs are running.
 - The production integration test now also asserts strictly monotonic runtime/health observation timestamps, matching the Go reducer's strict stale-event rejection. Simulated assistant completion timestamps are ordered explicitly.
 - Previous exact-head run 576 remains fully green across all Go and plugin checks; only the later dashboard/timestamp refinements are under current CI.
+
+### PR #39 ready for owner review — 2026-11-27 13:24Z
+
+- PR #39 is no longer draft; it is marked ready for review, mergeable, and zero commits behind master. Head remains `636c6776790647eeb0e8e89b34a2d16ace167101`, eight commits / 15 files.
+- Exact-head run `46006375493` / run 584 is fully green: Go build/vet/tests on Go 1.22 and stable, plugin typecheck, 81 plugin unit tests, and production runtime/event integration test (1/1).
+- No merge, deploy, or ship restart was performed. Awaiting owner approval before merge.
