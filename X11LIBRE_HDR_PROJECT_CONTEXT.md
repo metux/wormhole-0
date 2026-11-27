@@ -752,3 +752,11 @@ Xserver master: `325ba5ebb80ed97bb5387ec7b6f69d38bc40f8bb`.
 - #4240 rebased as one signed-off commit: `2019df16d73b7061a8fff8b2791803e5ec355bad`. Applied C style to new/modified helper definitions and CTA iteration loop; fixed `xf86ParseEDID()` parameter docs. Exact-head run `46023127915` queued.
 - #4240 appends `rawDataLen` to public `xf86Monitor`; existing offsets are preserved but structure size changes. Inspect the ABI-check workflow result before deciding readiness.
 - All four PRs remain Draft/open/unmerged. No local Xserver build/test claimed. Detailed status and technical review notes are in spec section 30.35.
+
+
+## 2026-11-27 15:19Z — #4231 test correction after first CI failure
+
+- #4231 now head `6e7a8004d053534578e5d976b4e91d45c395b3c5`, based on master `325ba5ebb80ed97bb5387ec7b6f69d38bc40f8bb`.
+- Previous run `46022322395` failed the Ubuntu unit test at `test/xtrans-fd-trunc.c:send_fds()`: helper passed the full 129-FD control-buffer length even when sending the one-FD seed message. The unused trailing control bytes were treated as malformed ancillary data and `sendmsg()` failed.
+- Corrected `msg_controllen` to `CMSG_SPACE(count * sizeof(int))`. New exact-head runs `46023742549` and `46023735465` pending; no green claim.
+- #4232 run `46022152207` still had Ubuntu/Hurd and other jobs running; #4240 run `46023127915` still had ABI/build jobs queued; #4230 run `46023298662` remained queued/in progress.
