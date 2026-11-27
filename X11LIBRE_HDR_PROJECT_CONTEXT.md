@@ -651,3 +651,16 @@ No confirmed new blocker was established by this patch review. This is not a ful
 - HDR-only request-parser integration is still only a design candidate; no parser, wire ABI, libxcb changes, output metadata signaling or rendering path has been implemented.
 - Output-side FD ordering under buffered output/EAGAIN remains a separate unresolved blocker.
 - The read-only EDID milestone is the only HDR runtime integration proposed in #4240; no KMS HDR mode selection/signaling or client-visible behavior is added.
+
+
+## 2026-11-27 13:45Z — Output-side FD ordering source audit
+
+Reviewed current Xserver master `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89` in `os/io.c`:
+- `WriteFdToClient()` queues descriptors through `_XSERVTransSendFd()` without a reply-byte marker.
+- `dixWriteToClient()` appends reply bytes to the existing per-client output buffer.
+- `FlushClient()` sends the buffer from its current beginning. When the transport returns EAGAIN it retains the unwritten suffix in `oc->output` and returns 0; after a full flush it sets `oc->output = NULL`.
+Therefore a queued FD group can attach to older pending output bytes if a prior flush was blocked and a later FD-bearing reply is appended before the pending bytes drain. This is a confirmed source-level hazard. No test yet demonstrates it dynamically, and no implementation fix has been made.
+
+Added normative-design discussion section 30.28 to `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md` in commit `44cb4ad97f17d65190a5d1814fca15fd5877795a`. It specifies required ordered semantics, a cautious flush-before-stage mitigation candidate, callback/reentrancy and partial-write concerns, and regression cases. It explicitly does not authorize implementation. A stronger long-term design is an output-segment queue that binds reply bytes and FDs together. Keep legacy DRI3 behavior unchanged pending a separate compatibility review.
+
+Next: inspect Xtrans send-queue semantics and actual DRI3 reply call sequences; design a deterministic DIX-level regression harness that can force partial writes/EAGAIN; then return with an evidence-backed minimal implementation proposal. Do not treat FlushClient() == 0 as proof the output buffer drained.
