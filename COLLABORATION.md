@@ -38,16 +38,27 @@ The file consists of YAML front matter and a free-form body:
 
 ```yaml
 ---
-id: w0-20261111T120000Z-0123456789abcdef
-from: Enterprise
-to: Discovery
-subject: Example
-type: message
+id: "w0-20261111T120000Z-0123456789abcdef"
+from: "Enterprise"
+to: "Discovery"
+subject: "Example"
+type: "message"
 reply_to: ""
 created: "2026-11-11T12:00:00Z"
 ---
 Message body.
 ```
+
+
+**Outbound preflight is mandatory.** Before committing any active message, run
+the validator bundled with the `wormhole-communication` skill against the
+exact file and expected recipient. The validator must exit zero. Every
+front-matter value must be a JSON double-quoted string (including `subject`
+and timestamps); this is a valid, unambiguous YAML subset and prevents errors
+such as an unquoted colon in a subject. Reject duplicate keys, mismatched
+recipient/path/filename, missing required metadata, invalid UTC timestamps,
+and empty bodies before publication. Never use a failed mailbox import as
+validation feedback.
 
 Required identifiers `id`, `from`, and `to` must be non-empty path-safe tokens matching `[A-Za-z0-9][A-Za-z0-9._-]*`. The recipient in `to` must match the mailbox directory. `subject`, `type`, and `reply_to` are optional. The body must not be empty.
 
