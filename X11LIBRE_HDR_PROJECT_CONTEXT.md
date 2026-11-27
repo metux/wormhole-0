@@ -664,3 +664,10 @@ Therefore a queued FD group can attach to older pending output bytes if a prior 
 Added normative-design discussion section 30.28 to `X11LIBRE_HDR_COLOR_MANAGEMENT_SPEC.md` in commit `44cb4ad97f17d65190a5d1814fca15fd5877795a`. It specifies required ordered semantics, a cautious flush-before-stage mitigation candidate, callback/reentrancy and partial-write concerns, and regression cases. It explicitly does not authorize implementation. A stronger long-term design is an output-segment queue that binds reply bytes and FDs together. Keep legacy DRI3 behavior unchanged pending a separate compatibility review.
 
 Next: inspect Xtrans send-queue semantics and actual DRI3 reply call sequences; design a deterministic DIX-level regression harness that can force partial writes/EAGAIN; then return with an evidence-backed minimal implementation proposal. Do not treat FlushClient() == 0 as proof the output buffer drained.
+
+
+## 2026-11-27 14:00Z — Xtrans send-path confirmation
+
+Follow-up review of Xserver master `os/Xtranssock.c` confirmed the lower-level FD attachment semantics recorded in spec section 30.29 (spec commit `62f1e150a46897d800b518f0d167de77603da45b`): queued descriptors are packed into SCM_RIGHTS on the next `_XSERVTransSocketWrite()`; EAGAIN before any byte leaves them queued; any positive sendmsg result discards the queued group even when only a short prefix was sent. Therefore a pending DIX output prefix can receive the descriptors, and after a positive short send the group is consumed with that prefix. This is stronger evidence for the output-ordering blocker, but remains source inspection only; no dynamic DIX test exists yet.
+
+Exact-head CI recheck at 14:00Z: #4230 run 45995722324 and #4232 run 45995831968 remain in progress; #4240 run 45996097202 remains queued. No head changes, no failures reported by the workflow-run summary, and no local build/test or merge.
