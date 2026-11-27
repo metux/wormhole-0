@@ -354,3 +354,9 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
   - `archive/pr35-runtime-health-pre-rebase-20261127` → `50cd126969048bb77a518535095ab3c7aeed4be9`
   - `archive/pr36-plugin-tests-pre-rebase-20261127` → `6e2ce61d219e115730502fefcf4762a39a5fdd68`
 - The active PR branches contain the rebased trees based on current master; both PRs remain open/Draft and have green exact-head CI. Do not rewrite these refs again. The temporary default-branch file was deleted; master tree has no net file changes relative to `f5622db`.
+
+### Enterprise runtime evidence arrived — 2026-11-27 12:54Z
+
+- The read-only probe report is present as `mail/ChatGPT/new/w0-20261127T115954Z-56e1924aa08a321e.md`; full evidence is also recorded in Starfleetctl issue #30 comment #7218309277.
+- At `2026-11-27T11:54:05Z`, Enterprise session `ses_e2be874a6ffeCg1iq2SfL9HORt` reported `opencode 1.19.3`, resolved `@opencode-ai/plugin 1.19.3`, and actual loaded runtime log `runtime-first-comms plugin=2.5.20 pid=9954 loaded_at=2026-11-26T18:06:22.873Z ship=Enterprise`; `ps -p 9954` matched the running session process.
+- The exact deployed-version prerequisite is satisfied. Do not send further nudges for this probe; the extra 12:30Z follow-up is redundant. Proceed with Go-side reducer and plugin event capture against the verified 1.19.3 contract. Remember: `chat.message` is awaited; the `event` callback is not awaited; `message.updated` provides assistant `parentID`, `time.completed`, and structured error data; `session.status` is session-scoped and distinguishes busy/idle/retry. Do not treat session idle alone as proof that an unrelated assistant turn completed.
