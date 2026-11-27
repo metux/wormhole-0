@@ -2345,3 +2345,34 @@ The bounded, length-aware EDID/CTA parser integration in PR #4240 is the current
 PR #4240 was rebased onto current Xserver master `9b99e420eab37f57ac69a733d809782ed99791fe` as one signed-off commit, head `865d56ccb91e7c202f6a4b8930a1e9493c52fe74`. The diff was verified to contain exactly the six intended files: `hw/xfree86/ddc/ddc.c`, `hw/xfree86/ddc/interpret_edid.c`, `hw/xfree86/drivers/video/modesetting/drmmode_display.c`, `include/edid.h`, `include/xf86DDC.h`, and `test/ddc-tests.c`. The two new exact-head Actions runs, `46045249263` and `46045246277`, were queued at this checkpoint. No merge or local build/test is claimed.
 
 Next: poll those exact-head runs, review any failures, and keep the PR Draft until the owner decides otherwise. After Stage 0, continue design work on output capability/mode policy and the already owner-approved linear BT.2020/D65 working-space semantics. Do not implement open RandR, wire-ABI, compositor-handoff or rendering decisions by assumption. In particular, Stage-1 output policy remains an owner decision gate.
+
+
+## 30.38 — Modesetting output-property audit for Stage 1 (2026-11-27)
+
+Reviewed current `X11Libre/xserver:master` at `9b99e420eab37f57ac69a733d809782ed99791fe`, primarily `hw/xfree86/drivers/video/modesetting/drmmode_display.c`.
+
+### Confirmed current behavior
+
+- `drmmode_output_create_resources()` exposes DRM connector range and enum properties as RandR output properties.
+- `drmmode_property_ignore()` discards every `DRM_MODE_PROP_BLOB` property. Therefore the connector's `HDR_OUTPUT_METADATA` blob is not exposed through this generic property path.
+- The generic RandR setter `drmmode_output_set_property()` applies range/enum values through `drmModeConnectorSetProperty()`; it does not construct an atomic request, does not include related connector/CRTC state in one transaction, and currently ignores the ioctl's return value before reporting success.
+- The dedicated atomic connector-property table in `drmmode_output_init()` currently contains only `CRTC_ID`. `connector_add_prop()` and the existing atomic modeset path provide a suitable internal mechanism, but no `Colorspace`, `max bpc` or `HDR_OUTPUT_METADATA` entry is registered or committed.
+- The driver already has property-blob creation and atomic-commit patterns for mode blobs and CRTC CTM. Those are implementation precedents, not HDR support.
+
+### Consequence
+
+The current modesetting driver does not provide a complete HDR output configuration/signaling path. A generic RandR property being visible is not proof that the corresponding atomic-only DRM property is applied successfully. In particular, HDR output metadata must be represented as a DRM property blob and committed atomically with the relevant connector/CRTC state; it must not be confused with the sink's EDID metadata.
+
+### Candidate implementation boundary (not yet authorized)
+
+Keep this work in the modesetting DDX rather than changing generic Xserver core APIs:
+
+1. Discover the connector properties by name and validate their DRM property type/enum values/ranges at connector initialization.
+2. Keep explicit per-output requested state for colorspace and max-bpc; keep final-frame HDR metadata as a distinct, compositor-controlled value, not copied from EDID.
+3. Build the HDR metadata blob and add it, together with the selected colorspace/max-bpc and existing connector/CRTC properties, to one atomic request. Handle blob lifetime across commit, failure and connector hotplug.
+4. On TEST_ONLY/commit failure, preserve the last valid configuration and expose/report failure; never report RandR success when the KMS operation failed.
+5. Keep unsupported properties absent and preserve the existing SDR configuration. Do not set HDR metadata merely because the sink advertises HDR capability.
+
+### Owner decision gate
+
+The RandR output-configuration model and the API that supplies final composed-frame metadata remain open under §9.2/§9.3. Before implementation, the owner must select whether output colorspace/max-bpc are configured through explicit RandR properties or a versioned color-management request, and how the compositor supplies final-frame metadata. No code or property ABI is changed by this audit.
