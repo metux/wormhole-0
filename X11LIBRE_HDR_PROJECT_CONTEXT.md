@@ -553,3 +553,18 @@ All four replacement PRs are draft, each contains exactly one commit, and CI was
 - Current #4232 head is now 2429f7f00860501602a86452f59b037895a0c925, parent #4231 current head 60a22b75864952817bd1589deac81571574ce5a7. The actual PR patch now lists exactly five files: os/Xtranssock.c, test/meson.build, test/tests.c, test/tests.h, test/xtrans-fd-alloc.c. Exact-head CI run 45905471008 is pending.
 - #4231 remains at 60a22b75864952817bd1589deac81571574ce5a7 with run 45904923410 pending.
 - No PR merged. Current #4232 remains based on #4231; after #4231 merges, rebase/retarget #4232 to updated master and rerun CI.
+
+
+## 2026-11-27 — Xtrans CI refresh and milestone-0 EDID integration draft
+
+Verified against X11Libre/xserver master `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`:
+
+- #4230 head `51b4086038600c50463fd76f530dc48d718a0a88`: exact-head workflows `45915153363` and `45915160161` both completed with no failed jobs. The latter was rerun after an Ubuntu Xephyr/Piglit failure; the retry passed.
+- #4231 head `fd0443f1d0e79fcaf2eb3f30b43963e5edbc5a32`: runs `45912011180` and `45912016553` passed; DCO passed.
+- #4232 head `44cca19ad3ff98a70afadaf80418318ea44283af`: runs `45915520647` and `45915525711` passed; DCO passed. It remains stacked on #4231 and must be retargeted/rebased after #4231 merges.
+- #4233 head `2c65e302c47d6edddb8296cd1321e7354f1f851a`: run `45888669984` passed, including DCO.
+- All four PRs remain Draft/open/unmerged. These CI results cover executed jobs; platform/image/release jobs marked skipped were not exercised. No local Xserver build/test has been run.
+
+A new isolated milestone-0 proposal is in Draft PR [#4240](https://github.com/X11Libre/xserver/pull/4240), branch `feature/edid-hdr-bounded-capabilities`, exact head `30d1fe14b002a1b7dd04141961388cf8ddf531dc`, based directly on the master SHA above. It records the actual EDID byte length, bounds extension walkers and CTA data-block parsing, only marks raw data complete when all advertised extension blocks are present, uses the size-aware parser in modesetting/full-DDC paths, and adds short/truncated/malformed EDID tests. The change is read-only capability discovery: it does not select HDR output modes, submit KMS HDR metadata, add a client wire ABI, or change rendering. Exact-head workflow `45994123556` is pending. No local build/test is claimed.
+
+Keep #4240 Draft until exact-head CI completes and the complete diff receives another review. No PR was merged. This milestone does not authorize implementation of the still-unapproved HDR extension ABI, request parser, output signaling or rendering pipeline.
