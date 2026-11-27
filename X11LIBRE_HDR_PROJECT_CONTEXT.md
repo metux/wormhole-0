@@ -599,3 +599,55 @@ The transport tests now request a four-byte header read while sending two-byte a
 The first #4240 CI run (`45994542211`) exposed a real compatibility regression in the new length guard: existing `xf86InterpretEEDID()` callers pass a pointer to a complete multi-block EDID but the legacy API has no length parameter. The regression test `xfree86_edid_ds_ranges_array_bound` correctly caught that extension detailed timings were no longer walked.
 
 Fix: `rawDataLen == 0` now explicitly means “legacy pointer-only API; length unknown”. The legacy walkers retain their historical caller contract in that case, while the size-aware `xf86ParseEDID()` path records the actual length and bounds all extension walkers. The legacy API documentation now states that callers must provide all advertised extension blocks and should use `xf86ParseEDID()` when the real length is known. Current #4240 head: `da9116cab956ea81d6b78c2fc6172741eb0f8377`; exact-head workflow `45996097202` is pending. The failed run is superseded; no merge.
+
+
+## 2026-11-27 13:30Z — Session continuity checkpoint and live Xserver refresh
+
+The owner requested that every meaningful HDR work checkpoint be recorded in Wormhole so a new ChatGPT session can resume without relying on chat history. Treat this as an ongoing operating requirement: update this handoff after material inspections, decisions, commits, CI changes and before ending a work period. This file remains the durable technical handoff; do not use account Memory or chat summaries as the authoritative project state. The separate workspace topic is also updated for dashboard discoverability.
+
+### Project and communication context refreshed
+
+- Re-read `CHATGPT_PROJECT_INSTRUCTIONS.md`, `COLLABORATION.md`, `SESSION_BOOTSTRAP.md`, and the accepted decision `decisions/2026-11-27--mandatory-wormhole-message-preflight.md` from `metux/wormhole-0:master`.
+- Read `X11Libre/mpbt-workspace:mtx/agent-config/.claude/skills/wormhole-communication/SKILL.md`, plus `coding-style-xserver/SKILL.md` and `xserver-testing/SKILL.md`.
+- Current session scope remains XLibre HDR only. Do not switch to Starfleetctl or XAverius work.
+- No Wormhole message was necessary for this owner-directed checkpoint; no outbound message was published.
+- Session continuity note: ChatGPT cannot enable OpenCode-like internal auto-compaction or enlarge/disable the context limit. Repository handoff updates are the durable fallback; do not claim internal compaction or background monitoring.
+
+### Live Xserver state verified at 2026-11-27 13:30Z
+
+- `X11Libre/xserver:master` remains `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`.
+- Open PRs #4230–#4233 and #4240 remain Draft/open/unmerged. Exact branch heads:
+  - #4230 `afa92c9ebf26d4faf8be20bee70842767124b82b`, branch `test/xtrans-af-unix-fd-framing`, base master; run `45995722324` in progress.
+  - #4231 `fd0443f1d0e79fcaf2eb3f30b43963e5edbc5a32`, branch `fix/xtrans-reject-truncated-fd-groups`, base master; run `45912016553` completed success.
+  - #4232 `b5387cf06a6614ee58e6608ec15e60680eeb1cdb`, branch `fix/xtrans-fd-queue-allocation-failure`, base #4231 branch; run `45995831968` in progress.
+  - #4233 `2c65e302c47d6edddb8296cd1321e7354f1f851a`, branch `ci/fix-signoff-action-permissions`, base master; run `45888669984` completed success.
+  - #4240 `da9116cab956ea81d6b78c2fc6172741eb0f8377`, branch `feature/edid-hdr-bounded-capabilities`, base master; run `45996097202` queued.
+- These are exact-head results. Do not transfer a prior run's result to a changed head. No merge or local Xserver build/test is claimed.
+
+### PR #4240 focused code review
+
+Reviewed all six changed-file patches and relevant surrounding source at the current PR head:
+
+- `hw/xfree86/ddc/ddc.c`
+- `hw/xfree86/ddc/interpret_edid.c`
+- `hw/xfree86/drivers/video/modesetting/drmmode_display.c`
+- `include/edid.h`
+- `include/xf86DDC.h`
+- `test/ddc-tests.c`
+
+Confirmed from source:
+- Size-aware `xf86ParseEDID()` copies the input buffer into the allocated monitor object before the DDC caller frees its temporary buffer; `rawDataLen` records the actual copied length.
+- The parser rejects null/short inputs, lengths above 32768, and allocation-size overflow.
+- Extension iteration is bounded by the stored length for size-aware callers. The legacy pointer-only API retains its old contract through `rawDataLen == 0`, now documented as requiring all advertised extension blocks.
+- CTA data-block lookup validates the declared data-collection offset and each block's length before advancing; video block traversal uses that bounded lookup.
+- Full DDC reads now fail closed on extension realloc/read failures; modesetting uses the size-aware parser and calls the HDR metadata parser only for a non-NULL monitor.
+- Tests cover short/partial buffers, advertised extension counts through 255, invalid CTA offsets and truncated data blocks, and complete real captured EDIDs.
+
+No confirmed new blocker was established by this patch review. This is not a full runtime/build validation: #4240 exact-head CI is still queued and no local build/tests were run. Revisit the full CI logs once run 45996097202 starts/completes, then continue auditing legacy callers and all extension walkers before recommending any state transition. PR remains Draft.
+
+### Current technical direction unchanged
+
+- Linux AF_UNIX SCM_RIGHTS evidence supports request-bounded reads without a one-byte probe; do not revive the superseded one-byte proposal.
+- HDR-only request-parser integration is still only a design candidate; no parser, wire ABI, libxcb changes, output metadata signaling or rendering path has been implemented.
+- Output-side FD ordering under buffered output/EAGAIN remains a separate unresolved blocker.
+- The read-only EDID milestone is the only HDR runtime integration proposed in #4240; no KMS HDR mode selection/signaling or client-visible behavior is added.
