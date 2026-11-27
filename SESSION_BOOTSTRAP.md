@@ -470,10 +470,12 @@ Recommended remediation order: (1) web/proxy security boundary and symlink-safe 
 
 ### Owner-requested Starfleetctl feature backlog (new; no implementation claimed)
 
-1. **Console-ship child restart without terminal loss (high priority).** Remote restart of the OpenCode child process for console-attached ships, keeping the supervisor/parent process and the exact same TTY alive. Must support plugin reload and recovery from hung OpenCode children; optionally select a new model. Existing pieces:
+1. **Console-ship child restart without terminal loss (high priority; tracked by [issue #40](https://github.com/mpbt-hq/starfleetctl/issues/40)).** Remote restart of the OpenCode child process for console-attached ships, keeping the supervisor/parent process and the exact same TTY alive. Must support plugin reload and recovery from hung OpenCode children; optionally select a new model. Current source audit on 2026-11-27 established:
    - `session restart <id> [--model <model>]` and web `POST /api/ships/<id>/restart` already exist.
-   - `LaunchShip` has a Unix control socket with `RESTART`/ `STOP` / `STATUS`, and restarts its managed `termctl-run` child.
-   - This is only partial: current restart kills/recreates `termctl-run`, so it does not yet establish the owner-required invariant that the same terminal/TTY survives while only the OpenCode child is replaced. Need map each launch mode (console/PTY, background, API) and implement a supervisor that owns the stable PTY and restarts only the OpenCode child inside it. Add integration tests asserting stable parent PID, PTY/pipe identity, and successful plugin reload after restart; add safe timeout/kill escalation for hung children.
+   - `LaunchShip` creates its control-socket accept loop in the caller process. That makes CLI-launched lifetime non-durable after the CLI exits; web-launched control is coupled to the web daemon.
+   - The `RESTART` handler kills/waits for the existing `termctl-run` process and launches another one. This destroys the old `termctl.TermHandle`/PTY and creates a new terminal; it does not preserve the same TTY.
+   - `RunTermctl` creates the stable `termctl.TermHandle` and runs the supplied shell command inside its PTY. The current inner command uses `exec opencode`, leaving no persistent in-PTY process to supervise only the OpenCode child.
+   - Proposed direction in issue #40: make a dedicated long-lived runner inside the existing PTY own the OpenCode child and restart control socket. Restart only that child, preserving the termctl-run process, runner, TTY identity, pipe inode, scrollback and attachment. Add real-PTY integration tests for PID/TTY/pipe invariants, plugin reload, invalid model rejection, graceful timeout/kill escalation, concurrent requests, and both CLI/web launch paths.
 2. **Model change from CLI and web (high priority).**
    - CLI `session restart <id> --model <model>` and the web ship-restart endpoint already accept a model.
    - PR #39 adds/retains a model selector in the ship detail UI; verify it targets the intended ship and is correctly persisted/projected.
@@ -487,6 +489,7 @@ Recommended remediation order: (1) web/proxy security boundary and symlink-safe 
 ### Immediate next sequence
 
 - Wait for owner deployment of master commit `9d01e0470a9ec1d9f7740bc608ff59c3b8403a03`; then independently verify PR #39 runtime behavior and issue #30 acceptance before closing.
-- In parallel, prepare scoped design/test plans for stable-TTY child restart and model change. Start with a launch-mode/process-tree map and tests; do not restart any owner console ship without explicit instruction.
+- Stable-PTY restart audit is complete and issue #40 is open. Next implement the in-PTY runner/supervisor on a dedicated branch/worktree, with real-PTY regression tests; do not restart any owner console ship without explicit instruction. Model change should use the same validated supervisor operation.
+- Continue issue #30 runtime-health work only after checking deployment/production evidence; issue #30 remains open. No open PRs were present at the 2026-11-27 check.
 - Next, design Wormhole truncation and status sync without changing the spool until migration/format decisions are agreed.
 - Then introduce reusable Git/GitHub packages with compatibility tests and migrate duplicate call sites incrementally.
