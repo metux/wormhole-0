@@ -2261,3 +2261,8 @@ The owner reviewed the scope of PRs #4231 and #4232 and requested that they cont
 - #4232 exact-head Actions run `46013779628` was pending at the last check; #4231 run `46012395834` was queued.
 - #4233 remains rebased to the same master at `d42037bb87537b3592a65eb897e0e08d430a04a2`; run `46011658495` queued.
 - All remain Draft/open/unmerged. No local build/test is claimed.
+
+
+## 30.33 — DIX treats Xtrans receive errors as fatal
+
+Current Xserver master `21d70661f216140a6080882b01d2d7bbf20191e4` `os/io.c:ReadRequestFromClient()` converts only would-block errors into a normal not-ready/yield path. Any other negative `_XSERVTransRead()` result is returned as a fatal read error to request processing. Therefore #4231's `EMSGSIZE` and #4232's `ENOMEM` abort the client read path; the server does not continue parsing later requests while retaining a partial ancillary FD queue. This is source-level confirmation, not a local runtime test.
