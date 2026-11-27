@@ -785,3 +785,35 @@ Reviewed current Xserver master `9b99e420eab37f57ac69a733d809782ed99791fe` in `h
 - Conclusion: no current HDR output-mode/signaling support. Future implementation should be modesetting-DDX-local, commit colorspace/max-bpc and a separately supplied final-frame HDR metadata blob atomically, and fail/rollback without disturbing SDR. Sink EDID capability must not be copied as frame metadata.
 - This remains design only. RandR output configuration and compositor final-frame metadata source are still owner decisions (§9.2/§9.3); no code, generic core API or RandR property ABI changed.
 - PR #4240 exact head `865d56ccb91e7c202f6a4b8930a1e9493c52fe74`, based on master `9b99e420eab37f57ac69a733d809782ed99791fe`. Runs `46045249263` and `46045246277` remain active; no failure observed. The latter includes `abi-changes-check`, still in progress at the last poll.
+## 2026-11-27 19:10Z — PR #4240 ABI review and Stage-1 output-path follow-up
+
+### PR #4240 current state
+
+- Refreshed X11Libre/xserver:master: ba6a3b9ede108bf3538cf7657446d2371b89221b.
+- PR #4240 remains Draft/open. Branch feature/edid-hdr-bounded-capabilities is one signed-off commit, cb8226ed9c9d6922cfc8fee1b11646965288ae80, directly on that master (1 ahead, 0 behind).
+- The diff remains exactly the six intended files: DDC read path, EDID parser, modesetting EDID path, include/edid.h, include/xf86DDC.h, and test/ddc-tests.c.
+- No rawDataLen member or other xf86Monitor layout change is present. The struct tag change does not change size/member offsets. The ABI-boundary comment rule for any future public-struct tail extension is now recorded in workspace skills (see below).
+- Full source review rechecked size validation before base-block access, unsigned extension count, advertised-size padding for size-aware allocations, complete-block copying, completeness flag, CTA block bounds, DDC allocation/read failure handling, input-buffer ownership, modesetting blob length use, and legacy pointer-only API contract. The legacy API still requires the caller to provide all advertised extension blocks; the size-aware API allocates zero-filled advertised storage so legacy walkers cannot step beyond its allocation.
+- A redundant duplicate rawData null check in xf86DoInterpretHDRMetadata() was removed. The branch was rewritten back to a single signed-off commit with force-with-lease.
+- Earlier exact-head 198dbe6... CI had abi-changes-check and xserver-unit-asan success, plus NVIDIA video-nv and several DDX builds success. That head was superseded by the redundant-check cleanup; do not treat its results as final validation.
+- Current exact-head runs for cb8226e...: 46054301373 and 46054309138. At the latest poll, the first had 4 successful jobs, 14 in progress, 3 queued and 1 skipped; abi-changes-check and xserver-unit-asan were still in progress. No failed jobs were observed. The second run was pending with no jobs yet. No local build/test was run; no merge is authorized or claimed. Keep PR Draft until exact-head CI and full review are complete.
+
+### Public-struct ABI rule
+
+Workspace branch X11Libre/mpbt-workspace:mtx/agent-config now has HEAD 20cd4cf11b66e99dbee393c334f294da9200b038.
+Both .chatgpt/skills/xserver-development/SKILL.md and .claude/skills/nvidia-abi/SKILL.md require that, if a public driver-visible struct tail extension is justified, an explicit ABI-boundary comment be placed immediately before the first private tail member, stating that everything below is server-private and not part of the driver ABI. The comment is documentation only and never replaces allocation-ownership proof. Never insert/reorder/remove public fields. For xf86Monitor, no extension is currently needed.
+
+### Stage-1 output-property audit
+
+- Follow-up source evidence was added to spec section 30.39, commit 7b527b568641189a365df6612edee0fcda2f029c.
+- On the current master, drmmode_property_ignore() discards all DRM blob properties; generic RandR range/enum property writes use drmModeConnectorSetProperty(), ignore its return value and report success; drmmode_output_get_property() does not read back effective state.
+- The atomic connector-property table currently contains only CRTC_ID. drmmode_crtc_set_mode() already builds a combined connector/CRTC/plane atomic request and supports TEST_ONLY before commit. DPMS and output-disable paths submit separate atomic requests and must preserve or explicitly clear any future HDR state.
+- A future implementation must not route HDR_OUTPUT_METADATA through the generic RandR property loop. It needs typed validation, atomic commit, requested-vs-committed state, blob lifetime management, explicit clearing on HDR-to-SDR/disable/hotplug, and rollback on TEST_ONLY/commit failure.
+- Owner decisions remain open: RandR properties versus a versioned color-management output request, and the authority/source for final composed-frame metadata. No output-property code or RandR ABI was changed.
+
+### Next
+
+1. Poll both exact-head CI runs for cb8226e...; inspect ABI, ASan and NVIDIA DDX jobs and all remaining matrix results. Do not merge while any required job is pending or failed.
+2. Keep #4240 Draft pending owner decision even after CI is green.
+3. Continue the Stage-1 design only: separate per-output mode/configuration from frame-associated final metadata; do not implement until the owner selects the API and metadata authority.
+4. Preserve the current HDR boundary: no generic Xtrans/DRI3 changes, no changes to legacy NVIDIA ABI accommodations, and no rendering/KMS HDR behavior as part of Stage 0.
