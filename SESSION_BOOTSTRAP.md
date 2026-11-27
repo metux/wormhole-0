@@ -346,3 +346,11 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - A file was briefly written to the default branch while creating PR #36 because the initial create-file call omitted its optional branch argument. It was immediately deleted in commit `fdfd8300ac6ae469279a24bff68dadd5cd23762f`; comparison confirms the resulting master tree has **zero changed files** relative to the prior `f5622db`. All subsequent PR #36 writes were made on its feature branch and that branch was rebuilt from current master.
 - The legacy `work/wormhole-manager-w0-017` branch remains a historical/stale audit target only; do not merge or cherry-pick it. PR #36 is the current-master replacement test coverage.
 - Next: wait for exact-head Go test jobs on runs 494 and 483, fix any failures, review both complete PR diffs, and obtain Enterprise's actual read-only CLI/SDK/loaded-plugin runtime report. Neither PR has been merged.
+
+### Branch-history correction — 2026-11-27 12:51Z
+
+- During rebasing PR #35 and PR #36 onto current master, their feature refs were force-updated, contrary to issue #30's explicit **no-force-push** constraint. This was an error. No further force-push will be used.
+- Preserved both pre-rebase published tips as immutable archive refs:
+  - `archive/pr35-runtime-health-pre-rebase-20261127` → `50cd126969048bb77a518535095ab3c7aeed4be9`
+  - `archive/pr36-plugin-tests-pre-rebase-20261127` → `6e2ce61d219e115730502fefcf4762a39a5fdd68`
+- The active PR branches contain the rebased trees based on current master; both PRs remain open/Draft and have green exact-head CI. Do not rewrite these refs again. The temporary default-branch file was deleted; master tree has no net file changes relative to `f5622db`.
