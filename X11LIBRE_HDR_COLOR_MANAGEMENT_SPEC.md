@@ -2209,3 +2209,14 @@ Follow-up source audit of `X11Libre/xserver:master` `os/Xtranssock.c` confirms t
 Combined with DIX's retained output buffer, the failure mode is concrete: a queued FD group may be delivered with the first successfully written prefix of an older pending output buffer. If the first retry gets EAGAIN, the group remains queued and may attach on a later flush; if a later sendmsg succeeds with a short positive write, the group is consumed with that prefix, even if it is not the intended reply.
 
 This further confirms that a “flush first, then queue FDs” mitigation must prove the old output is fully drained before staging the descriptors, and must ensure no other output can be emitted before the target reply. The long-term ordered-segment API remains the safer abstraction. This is source inspection only; no dynamic DIX regression or implementation change has been made.
+
+
+## 30.30 — Existing Xserver reply call-site inventory for queued FDs
+
+A current-master search for `WriteFdToClient()` found the following in-tree call sites outside the implementation itself:
+
+- DRI3: `dri3_send_open_reply()`, `proc_dri3_buffer_from_pixmap()`, `proc_dri3_fd_from_fence()`, and `proc_dri3_buffers_from_pixmap()` in `Xext/dri3/dri3_request.c`.
+- RandR leases: `ProcRRCreateLease()` in `Xext/randr/rrlease.c`.
+- MIT-SHM FD passing: `ProcShmCreateSegment()` in `Xext/shm/shm.c`.
+
+These handlers queue FDs before emitting their corresponding reply. This confirms that the generic next-write contract is relied upon by existing protocols, not just a hypothetical HDR extension. It does **not** by itself prove a user-visible failure under backpressure; the DIX output-buffer/EAGAIN regression still needs to demonstrate the association behavior. Do not silently change the legacy contract in the HDR work. Any generic repair requires its own compatibility review and tests for all existing call sites. HDR should use an explicitly ordered private helper until a generic fix is justified.
