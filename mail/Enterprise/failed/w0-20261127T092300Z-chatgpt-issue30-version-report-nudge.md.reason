@@ -1,0 +1,5 @@
+message: w0-20261127T092300Z-chatgpt-issue30-version-report-nudge.md
+mailbox: Enterprise
+from: new
+failed_at: 2026-11-27T09:23:13Z
+reason: invalid message front matter: yaml: line 4: mapping values are not allowed in this context
