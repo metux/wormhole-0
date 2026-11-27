@@ -12,6 +12,7 @@
    - Locate the applicable skill for other work.
 4. Refresh branches/HEADs, task board, open PRs/issues, CI, and worktree ownership in all relevant repositories.
 5. Inspect new Wormhole mail and coordination reports before assigning or nudging ships.
+6. Apply decision `decisions/2026-11-27--mandatory-wormhole-message-preflight.md`; validate every outbound message with the bundled communication-skill validator before publication.
 
 The superseded bootstrap is preserved via `SESSION_HISTORY_2026-11-25.md`. That archive is historical only.
 
@@ -27,6 +28,7 @@ The superseded bootstrap is preserved via `SESSION_HISTORY_2026-11-25.md`. That 
 - Never manually edit/move/delete manager-owned Wormhole lifecycle files under `mail/*/cur`, `processed`, or `failed`. Never replay frozen legacy top-level `inbox/` or `outbox/`.
 - Distinguish publication, claim/import, active-session injection, explicit acknowledgement, work started, and completion. A Git commit or `processed/` entry proves neither model acknowledgement nor action.
 - Follow `COLLABORATION.md` exactly; messages are immutable.
+- Before every outbound message commit, run `python3 .claude/skills/wormhole-communication/scripts/validate_message.py mail/<recipient>/new/<message-id>.md --recipient <recipient>`; do not publish unless it exits zero and prints `VALID`. All front-matter values must be JSON double-quoted strings.
 
 ## Fleet handoff — latest known 2026-11-25; refresh live board
 
