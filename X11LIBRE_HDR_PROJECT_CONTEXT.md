@@ -678,3 +678,40 @@ Exact-head CI recheck at 14:00Z: #4230 run 45995722324 and #4232 run 45995831968
 Current-master search found queued-FD reply call sites in DRI3 (`Xext/dri3/dri3_request.c`), RandR leases (`Xext/randr/rrlease.c`) and MIT-SHM FD passing (`Xext/shm/shm.c`). They all call `WriteFdToClient()` before emitting their corresponding reply. Spec section 30.30 records the inventory (commit `8797047bf040aca527b0e61376a72bd3a0b145d3`). This confirms the next-write contract is used by existing protocols; it does not yet prove an observed backpressure failure. Do not silently change the legacy contract in HDR work. HDR should use an explicitly ordered private helper unless a generic repair is separately justified and compatibility-tested.
 
 The next concrete engineering task is a deterministic DIX-level regression that forces old buffered output/EAGAIN, then sends an FD-bearing reply and inspects which bytes receive the SCM_RIGHTS group. The test must also cover retry, positive short send, callback/reentrancy and teardown. No such test or implementation exists yet.
+
+
+## 2026-11-27 14:15Z — Owner scope review of Xtrans PRs #4231–#4233
+
+The owner questioned the mismatch between the stated test scope and the Xtrans implementation changes in #4231, and the extra SendFds/DRI3 changes in #4232. Reviewed the exact diffs and narrowed #4232 accordingly.
+
+### #4231 — general fail-closed fix, not merely a test
+
+- Rebased onto current Xserver master `21d70661f216140a6080882b01d2d7bbf20191e4`.
+- New head: `4bb84c5e5fa9e9dc60a113d3c60149205a269fa7`, one signed-off commit.
+- PR retitled `xtrans: reject truncated SCM_RIGHTS input`; body now explains the actual fix.
+- `os/Xtranssock.c` closes the descriptors actually installed by `recvmsg()` when `MSG_CTRUNC` is set and returns `EMSGSIZE`. The 129-FD test exercises the 128-FD control-buffer limit.
+- Assessment: not needed for compliant HDR FD groups under the transport limit, but a justified generic Xtrans hardening to prevent incomplete/malformed groups contaminating the connection FIFO. Keep it separate from HDR architectural requirements.
+- Exact-head Actions run `46012395834` queued at last check.
+
+### #4232 — narrowed to HDR receive-side prerequisite
+
+- New head: `6ef3a93ef2a0b43d4fc9d77bf9342143d8d12a37`, one signed-off commit, stacked on #4231 head above.
+- PR title: `xtrans: expose per-read FD count and handle receive OOM`.
+- Kept only: per-read received FD count getter; receive queue allocation failure handling with full cleanup/fail-closed behavior; tests for distinct read-group counts and receive allocation failure.
+- Removed from the PR: `SendFds()`, atomic multi-FD send queue, `WriteFdsToClient()`, and DRI3 batch-send conversion. No DRI3 file changes remain.
+- The outbound send path is intentionally unchanged. Send-side allocation error propagation is deferred: HDR's current candidate is receive-side only, and the existing DRI3 multi-FD reply path needs a separate atomicity/ownership design before safely surfacing partial enqueue failures.
+- Important test correction: the original #4232 test file was not listed in Meson `unit_sources` and was not called by `tests.c`; additionally the `malloc` wrapper had no `-Wl,-wrap,malloc` linker argument. Current head registers the tests in Meson and the runner, and enables the wrapper. Therefore the earlier green CI run `45995831968` for superseded head `b5387cf...` did not exercise the unregistered allocation tests.
+- Exact-head run `46013405746` queued at last check.
+
+### #4233
+
+- Owner rebased it onto current master `21d70661f216140a6080882b01d2d7bbf20191e4`.
+- Head `d42037bb87537b3592a65eb897e0e08d430a04a2`; one signed-off commit; only grants `pull-requests: write` to the `check-sign-off` job.
+- Exact-head Actions run `46011658495` queued at last check. This verifies the rebase target and diff scope, not yet CI success.
+
+### Current Xserver base and next actions
+
+- Master advanced from `d439c01f...` to `21d70661...` with commit `xfree86: list modesetting after all hardware specific drivers` (#4239).
+- #4230 and #4240 remain based on `d439c01f...`; rebase them onto current master and refresh exact-head CI before merge consideration.
+- #4231–#4233 remain Draft/open/unmerged. No local Xserver build/test has been run.
+- Next: wait/check exact-head CI for #4231–#4233; review the new #4232 tests and code against CI results; then rebase #4230/#4240 and continue HDR receive-side parser design. Do not start outbound FD implementation until its DIX ordering/ownership semantics are resolved.
