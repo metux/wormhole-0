@@ -2220,3 +2220,33 @@ A current-master search for `WriteFdToClient()` found the following in-tree call
 - MIT-SHM FD passing: `ProcShmCreateSegment()` in `Xext/shm/shm.c`.
 
 These handlers queue FDs before emitting their corresponding reply. This confirms that the generic next-write contract is relied upon by existing protocols, not just a hypothetical HDR extension. It does **not** by itself prove a user-visible failure under backpressure; the DIX output-buffer/EAGAIN regression still needs to demonstrate the association behavior. Do not silently change the legacy contract in the HDR work. Any generic repair requires its own compatibility review and tests for all existing call sites. HDR should use an explicitly ordered private helper until a generic fix is justified.
+
+
+## 30.31 — Narrowed receive-side Xtrans prerequisites; outbound queue work deferred
+
+The owner reviewed the scope of PRs #4231 and #4232 and requested that they contain only changes justified by the HDR FD design. The current split is:
+
+### PR #4231 — general truncated-ancillary fail-closed fix
+
+- Current head after rebase onto Xserver master `21d70661f216140a6080882b01d2d7bbf20191e4`: `4bb84c5e5fa9e9dc60a113d3c60149205a269fa7`.
+- On `MSG_CTRUNC`, close every descriptor actually installed from the truncated control buffer and fail the transport read with `EMSGSIZE`.
+- This is not needed for compliant HDR clients sending small, valid groups; it is a general Xtrans correctness/security hardening that prevents an incomplete ancillary group from entering the connection FIFO. Keep it as a separately justified generic fix, not as an HDR-specific architectural requirement.
+- PR title/body now describe the actual behavior and regression rather than suggesting this is test-only.
+- Exact-head CI run `46012395834` was queued at the last check; no local build/test or merge is claimed.
+
+### PR #4232 — minimal receive-side HDR prerequisite
+
+- Current head: `6ef3a93ef2a0b43d4fc9d77bf9342143d8d12a37`, stacked on #4231.
+- Exposes the count of SCM_RIGHTS descriptors delivered by the immediately preceding Xtrans read, resetting it for each read. This is the signal needed by the request-bounded HDR receive candidate.
+- Handles receive-queue allocation failure explicitly: fail the read, close previously queued descriptors and all remaining descriptors in the current ancillary group, clear the queue and reset the count.
+- Adds the focused receive-count and receive-allocation-failure tests to Meson's unit source list and the unit runner. The malloc fault injector is now linked with `-Wl,-wrap,malloc`; the original broad PR version had the test file unregistered and its malloc wrapper inactive, so its earlier green CI run did not validate those tests.
+- No `SendFds()` API, no atomic multi-FD send queue, no `WriteFdsToClient()`, and no DRI3 batch-send conversion remain in this PR.
+- The existing outbound FD queue remains unchanged. Send-side allocation error propagation is deferred because the HDR receive-side design has not selected an outbound FD transport, and changing the existing DRI3 multi-FD reply path safely requires a separate atomicity/ownership design.
+- Exact-head CI run `46013405746` was queued at the last check. No local build/test or merge is claimed.
+
+### PR #4233 and current base
+
+- Xserver master is now `21d70661f216140a6080882b01d2d7bbf20191e4` (the #4239 modesetting driver-order fix).
+- Owner rebased #4233 onto this master. Exact head `d42037bb87537b3592a65eb897e0e08d430a04a2` changes only the `check-sign-off` job permission to `pull-requests: write`; the permission remains job-scoped. Exact-head run `46011658495` was queued at the last check.
+- #4230 and #4240 still have their earlier base `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89` and need rebase/current-head CI refresh before merge consideration.
+- All these PRs remain Draft/open/unmerged. Do not treat queued runs or prior-head green runs as current validation.
