@@ -517,3 +517,12 @@ Recommended remediation order: (1) web/proxy security boundary and symlink-safe 
 - Exact-head run `46028611025` completed successfully: Go 1.22.x and stable both passed build, vet and full `go test ./... -count=1 -timeout 300s`; plugin typecheck and plugin tests passed.
 - GitHub issue #40 was updated with the precise scope/limitations and CI evidence (comment `7222599480`).
 - The stable-PTY child-only restart remains unimplemented; green CI only verifies the preparatory control-protocol/model-validation patch, not real PTY behavior.
+
+
+### Issue #40 continuation — 2026-11-27 16:00Z
+
+- Revalidated live repository state: `mpbt-hq/starfleetctl:master` remains `9d01e0470a9ec1d9f7740bc608ff59c3b8403a03`; feature branch `feat/session-stable-pty-restart` remains `58329b99fe74a139ff7bd1b8c89b93f45482f798`. Issue #40 is still open; there is no open PR for this branch.
+- Re-read current `LaunchShip`/`RestartShip`/`StopShip`/`RunTermctl` code. The caller-owned control listener and legacy restart that kills/replaces `termctl-run` are still present. The preparatory patch is not the stable-PTY implementation.
+- Enterprise imported all three corrected testbed requests (`w0-20261127T150817Z-chatgpt-issue40-testbed-v2`, `w0-20261127T152802Z-chatgpt-issue40-testbed-nudge`, `w0-20261127T155400Z-chatgpt-issue40-test-run`) to `mail/Enterprise/processed/`. No correlated response/report exists in `mail/ChatGPT/new/`; no acknowledgement, local test execution, Go version, worktree state, or PTY harness capability is established.
+- No local machine access was available in this session. No local or real-PTY tests were run. No live process/ship was signalled, restarted or stopped; no deployment was performed.
+- Next engineering step remains the in-PTY supervisor: preserve the existing `termctl-run` PID, `TermHandle`, PTY, control pipe and scrollback; supervise only the OpenCode child process group; hand foreground TTY ownership to that group and restore it after exit. Add real-PTY integration tests for PID/TTY/control-pipe identity, keyboard/Ctrl-C, descendant cleanup, restart serialization, failed startup, and explicit stop. Keep API-mode restart explicitly unsupported unless it is routed through an equivalent supervisor. Do not open a ready-for-review PR until these criteria pass.
