@@ -671,3 +671,10 @@ Next: inspect Xtrans send-queue semantics and actual DRI3 reply call sequences; 
 Follow-up review of Xserver master `os/Xtranssock.c` confirmed the lower-level FD attachment semantics recorded in spec section 30.29 (spec commit `62f1e150a46897d800b518f0d167de77603da45b`): queued descriptors are packed into SCM_RIGHTS on the next `_XSERVTransSocketWrite()`; EAGAIN before any byte leaves them queued; any positive sendmsg result discards the queued group even when only a short prefix was sent. Therefore a pending DIX output prefix can receive the descriptors, and after a positive short send the group is consumed with that prefix. This is stronger evidence for the output-ordering blocker, but remains source inspection only; no dynamic DIX test exists yet.
 
 Exact-head CI recheck at 14:00Z: #4230 run 45995722324 and #4232 run 45995831968 remain in progress; #4240 run 45996097202 remains queued. No head changes, no failures reported by the workflow-run summary, and no local build/test or merge.
+
+
+## 2026-11-27 14:15Z — Existing queued-FD reply callers inventoried
+
+Current-master search found queued-FD reply call sites in DRI3 (`Xext/dri3/dri3_request.c`), RandR leases (`Xext/randr/rrlease.c`) and MIT-SHM FD passing (`Xext/shm/shm.c`). They all call `WriteFdToClient()` before emitting their corresponding reply. Spec section 30.30 records the inventory (commit `8797047bf040aca527b0e61376a72bd3a0b145d3`). This confirms the next-write contract is used by existing protocols; it does not yet prove an observed backpressure failure. Do not silently change the legacy contract in HDR work. HDR should use an explicitly ordered private helper unless a generic repair is separately justified and compatibility-tested.
+
+The next concrete engineering task is a deterministic DIX-level regression that forces old buffered output/EAGAIN, then sends an FD-bearing reply and inspects which bytes receive the SCM_RIGHTS group. The test must also cover retry, positive short send, callback/reentrancy and teardown. No such test or implementation exists yet.
