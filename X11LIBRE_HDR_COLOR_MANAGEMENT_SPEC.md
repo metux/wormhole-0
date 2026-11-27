@@ -2153,3 +2153,44 @@ This relies on the receiver beginning exactly at the current request boundary an
 - Regression proving legacy DRI3 and ordinary-client read-ahead behavior is unchanged.
 
 No Xserver request-parser code, protocol XML, generated binding or libxcb code is changed by this design candidate. Owner approval is still required before implementation.
+
+
+## 30.28 — Output-side FD association hazard in the current DIX/Xtrans path
+
+**Status: confirmed source-level hazard; proposed repair not yet approved or implemented.** This section records a separate prerequisite for any HDR reply that carries SCM_RIGHTS. It does not change the legacy DRI3 contract.
+
+### Current source behavior
+
+Reviewed against `X11Libre/xserver:master` at `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`, primarily `os/io.c`:
+
+- `WriteFdToClient()` (around lines 489–499) only calls `_XSERVTransSendFd()`. It does not associate the queued descriptors with a particular reply byte offset or output-buffer segment.
+- `dixWriteToClient()` appends reply bytes to the client's existing `ConnectionOutput` buffer and may then call `FlushClient()`.
+- `FlushClient()` (around lines 939–1016) sends the output buffer from its current beginning through `_XSERVTransWrite()`. On EAGAIN it retains the unwritten suffix in `oc->output` and returns 0, not an error. On a successful flush it frees/recycles the output buffer and sets `oc->output = NULL`.
+- Consequently, if earlier ordinary output remains buffered after EAGAIN, a later `WriteFdToClient()` followed by `WriteToClient()` can cause the queued FD group to be attached to the next transport write containing those earlier bytes, rather than to the first byte of the intended FD-bearing reply. This is a stream-ordering/association hazard, not a descriptor ownership issue.
+
+### Required semantics for an HDR-specific send path
+
+The HDR path must bind the FD group to the exact reply segment and preserve that association across short writes, EAGAIN, retry and teardown. It must not depend on “the next transport write” unless it has first proved that the next write begins with the intended reply and cannot be interleaved by callbacks or other output.
+
+A possible minimal mitigation to investigate is:
+
+1. Before staging any FD, attempt to flush all prior client output.
+2. Treat the operation as BUSY/WOULD_BLOCK if any prior output remains pending after that flush. Do not queue or transfer the new FDs in that case.
+3. Only after proving the old output queue is empty, stage the FD group and immediately append/flush the corresponding reply under a non-interleavable DIX operation.
+4. Define what happens if allocation fails after the FD group is staged, if the transport returns EAGAIN before sending any reply byte, or if a short send transfers ancillary data with only a prefix of the reply.
+5. On teardown/fatal failure, close every descriptor still owned by the server exactly once; on retry, never duplicate or lose the group.
+
+This is only a candidate, not yet demonstrated safe. In particular, audit `FlushCallback` reentrancy, output-buffer allocation/resize paths, any intervening writes between FD staging and reply emission, and whether the transport API's ancillary ownership semantics are sufficient to resume after a partial send. A cleaner long-term design is an ordered output segment API that stores reply bytes and the FD group together and advances both as one queue entry.
+
+### Required regression coverage
+
+- Queue ordinary reply/event bytes, force a partial write followed by EAGAIN, then attempt an FD-bearing reply; verify the ordinary bytes arrive first without FDs.
+- Retry after writable notification; verify the FD group is delivered exactly once with the first byte of the intended reply.
+- Exercise EAGAIN before any reply byte is sent and after a positive short send.
+- Exercise multiple adjacent FD-bearing replies with ordinary events between them.
+- Force output-buffer allocation/resize failure after the send operation is prepared.
+- Exercise client teardown with a queued-but-unsent group and verify each FD is closed exactly once.
+- Exercise FlushCallback or any permitted reentrant output path to prove no unrelated bytes can slip between FD staging and reply emission.
+- Verify the legacy DRI3 `WriteFdToClient()` path remains unchanged unless a separate compatibility fix is deliberately reviewed.
+
+Do not claim the existing `FlushClient()` return value proves output drained: EAGAIN returns 0 while leaving `oc->output` and its pending byte count live. The implementation must inspect the queue state or use a stronger result contract. No HDR send helper, Xserver code or test was changed by this design note.
