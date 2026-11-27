@@ -2106,3 +2106,50 @@ The owner explicitly authorized applying their DCO sign-off to these contributio
 `Signed-off-by: Enrico Weigelt, metux IT consult <info@metux.net>`
 
 Replacement PRs #4234–#4237 each contain one consolidated commit with this trailer. Their Git trees were verified identical to the respective original PR heads, and each replacement commit has the same master parent `d439c01fef4c8dcb3a0d05471e3edb0eb00f6f89`. Original PRs #4230–#4233 remain open pending replacement CI and DCO verification. This records the sign-off authorization and publication, not a claim that CI or review has passed.
+
+
+## 30.27 — Request-bounded receive candidate for HDR-only FIFO validation
+
+**Status: design candidate; not an approved wire ABI or implementation authorization.** This section records the request-bounded alternative that supersedes the earlier exact-marker-offset proposal for the HDR receive path. It preserves the established connection-wide FD FIFO used by DRI3.
+
+### Evidence and prerequisite
+
+- The Linux AF_UNIX/SOCK_STREAM tests in Xserver PR #4230 show that a large recvmsg() may coalesce ordinary bytes preceding an FD-bearing sendmsg() with the entire FD-bearing payload. The returned byte count therefore cannot identify the ancillary marker's exact offset within that byte range; see section 30.22.
+- Xserver PR #4232 adds a private _XSERVTransGetLastReadFdCount() candidate. It reports the number of descriptors received during the immediately preceding Xtrans read, resets on each read and clears on read failure. Its live test observes counts 0, 2, 1, 0 across an ordinary request, a two-FD first partial-header read, a second one-FD partial-header read and the body.
+- The API is not merged yet. This candidate depends on that per-read signal and on the existing FIFO remaining ordered.
+
+### Candidate receive rule
+
+For negotiated HDR clients only, the server may disable request read-ahead and read exactly one request at a time:
+
+1. Enable the mode only after a compositor-acquisition round-trip barrier. Refuse negotiation if bytes beyond the negotiation request are already buffered; already-read-ahead bytes cannot be unambiguously reassociated.
+2. At the start of each request, reset a private per-connection request_read_index and request_fd_count.
+3. In ReadRequestFromClient(), cap each positive transport read to the exact remaining bytes needed for the current parse stage (needed - gotnow), including the normal four-byte xReq header, the BIG-REQUESTS extended-length header when present, and the remaining request body. Do not read into the next request.
+4. Immediately after each positive Xtrans read, obtain _XSERVTransGetLastReadFdCount(). A nonzero group is permitted only on the first positive read at the request boundary. Record that count; reject any later nonzero count during a partial header, BIG-REQUESTS header or body. A group on a request that does not declare FDs is also rejected.
+5. EAGAIN and zero-byte reads do not advance request_read_index. Existing BIG-REQUESTS length parsing remains authoritative.
+6. Once the full request is assembled, pass the recorded actual FD count to the request handler. The handler validates it against the request's declared fd_count before consuming the existing FIFO through the established ReadFdFromClient() ownership path. Missing, extra, duplicate or late groups fail closed.
+7. Reset the per-request state only after the request has been validated and dispatched or rejected.
+
+This relies on the receiver beginning exactly at the current request boundary and not reading ahead. Because the first bounded read can contain only a partial header, the per-read FD count is the association signal; no byte offset is inferred from recvmsg()'s returned byte count.
+
+### Scope and compatibility
+
+- Apply the bounded-read mode only to the explicitly negotiated HDR client path.
+- Keep ordinary clients and legacy DRI3 on the current read-ahead and FIFO behavior.
+- Do not change the public Xtrans or DRI3 APIs for this candidate; the per-read getter remains private.
+- Do not infer request-scoped grouping from the flat FIFO alone. The handler must compare the first-read count with the request-declared count before consuming descriptors.
+- Output-side FD ordering remains a separate unresolved issue; this section does not authorize or solve it.
+
+### Required tests
+
+- Ordinary request followed by one FD-bearing request, both pipelined by the client.
+- FD-bearing request whose header arrives in multiple partial reads; the FD group must appear only on the first positive read.
+- A second FD group attached to a later partial header read must be rejected.
+- FD group attached to a request body or a request declaring zero FDs must be rejected.
+- BIG-REQUESTS header split across reads, with the FD group on the first request byte.
+- Missing, extra and mismatched FD counts; multiple consecutive FD-bearing requests; ordinary requests between them.
+- Negotiation barrier with and without pre-buffered bytes beyond the negotiation request.
+- EAGAIN between partial reads; no state advancement on EAGAIN or zero-byte reads.
+- Regression proving legacy DRI3 and ordinary-client read-ahead behavior is unchanged.
+
+No Xserver request-parser code, protocol XML, generated binding or libxcb code is changed by this design candidate. Owner approval is still required before implementation.
