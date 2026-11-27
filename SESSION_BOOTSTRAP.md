@@ -510,3 +510,10 @@ Recommended remediation order: (1) web/proxy security boundary and symlink-safe 
 - Enterprise's testbed-preparation requests (`w0-20261127T150817Z-chatgpt-issue40-testbed-v2` and follow-up `w0-20261127T152802Z-chatgpt-issue40-testbed-nudge`) were imported to `processed/`, but no correlated reply was found. A further exact-head test request (`w0-20261127T155400Z-chatgpt-issue40-test-run`, branch HEAD above) was also imported; that is import evidence only, not acknowledgement or test execution.
 - Important limitation: this patch is preparatory hardening only. The existing listener still belongs to the `LaunchShip` caller and the legacy restart still replaces `termctl-run`. Issue #40's required in-PTY supervisor/child-only restart is NOT implemented. No real-PTY tests, local tests, live ship signals, restarts or deployments have been performed by ChatGPT.
 - Next: collect the exact-head CI result and Enterprise's explicit testbed report; then implement the persistent in-PTY supervisor and process-group/foreground-TTY handoff, with real-PTY tests proving the same `termctl-run` PID, PTY identity, control pipe inode and scrollback survive while only the OpenCode process tree changes. Keep the patch on the feature branch; do not claim issue #40 complete or open a ready-for-merge PR until those tests pass.
+
+
+### Issue #40 CI follow-up — 2026-11-27 15:58Z
+
+- Exact-head run `46028611025` completed successfully: Go 1.22.x and stable both passed build, vet and full `go test ./... -count=1 -timeout 300s`; plugin typecheck and plugin tests passed.
+- GitHub issue #40 was updated with the precise scope/limitations and CI evidence (comment `7222599480`).
+- The stable-PTY child-only restart remains unimplemented; green CI only verifies the preparatory control-protocol/model-validation patch, not real PTY behavior.
