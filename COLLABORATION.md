@@ -60,7 +60,7 @@ recipient/path/filename, missing required metadata, invalid UTC timestamps,
 and empty bodies before publication. Never use a failed mailbox import as
 validation feedback.
 
-Required identifiers `id`, `from`, and `to` must be non-empty path-safe tokens matching `[A-Za-z0-9][A-Za-z0-9._-]*`. The recipient in `to` must match the mailbox directory. `subject`, `type`, and `reply_to` are optional. The body must not be empty.
+Required fields are `id`, `from`, `to`, `subject`, `type`, and `created`. The `id`, `from`, and `to` values must be non-empty path-safe tokens matching `[A-Za-z0-9][A-Za-z0-9._-]*`. The `to` value must match the recipient mailbox directory, and the filename must be exactly `<id>.md`. `reply_to` and project-specific metadata are optional. All front-matter values must be JSON double-quoted strings. `created` must be a canonical UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` form. The body must not be empty.
 
 Once published, never edit or replace a message. Retries must preserve the same message ID and exact bytes. The manager owns lifecycle moves from `new/` to `cur/`, then to `processed/` or `failed/`; do not manually edit those directories.
 
