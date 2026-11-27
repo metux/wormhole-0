@@ -2325,3 +2325,23 @@ All four PRs remain Draft/open/unmerged. Do not rely on successful runs from sup
 - Fixed the helper to set `msg_controllen = CMSG_SPACE(count * sizeof(int))` for each message. The 129-FD test still uses the full control buffer; the prior-FD seed now uses the correct one-FD control length.
 - New exact-head Actions runs `46023742549` and `46023735465` were pending at the latest poll. The old run's Ubuntu unit failure is superseded by this correction; do not treat the new head as green until its own CI completes.
 - #4232 run `46022152207` continued with Ubuntu, Hurd and other jobs in progress; #4240 run `46023127915` still had ABI/build jobs queued. #4230 run `46023298662` remained queued/in progress.
+
+
+
+## 30.37 — Owner priority decision: keep Xtrans follow-up low priority (2026-11-27)
+
+The owner explicitly redirected the active work back to HDR and limited Xserver-core changes to those demonstrably required by HDR.
+
+- The exact SCM_RIGHTS marker-offset idea from §30.20 is invalid: a coalesced `recvmsg()` byte count cannot identify the marker's byte position; §30.22 remains authoritative.
+- The request-bounded receive approach in §30.27 is only a candidate. It is not approved for implementation and must not trigger general Xtrans/DIX refactoring ahead of a concrete HDR protocol requirement.
+- Keep #4230 (Linux transport behavior tests), #4231 (generic `MSG_CTRUNC` hardening) and #4232 (per-read FD count / receive-queue allocation handling) as separate low-priority work. Do not merge or expand them as part of the HDR implementation merely because they may be useful.
+- Preserve the existing DRI3 FIFO behavior. Revisit request-bounded receive validation only when the finalized HDR request schema proves that the existing FIFO/counting contract is insufficient. Any future design note must explicitly state that exact byte offsets are not recoverable from a coalesced `recvmsg()` return count.
+- Output-side FD ordering is still a separate unresolved issue. Do not implement HDR FD-bearing replies until their ordering/ownership contract is necessary and proven; do not change legacy DRI3 behavior as collateral work.
+
+### Active HDR work
+
+The bounded, length-aware EDID/CTA parser integration in PR #4240 is the current Stage-0 core prerequisite: HDR sink metadata must not be read from truncated or malformed EDID extension buffers. It remains read-only capability discovery; it does not enable output mode selection, KMS metadata signaling, a client protocol, or rendering.
+
+PR #4240 was rebased onto current Xserver master `9b99e420eab37f57ac69a733d809782ed99791fe` as one signed-off commit, head `865d56ccb91e7c202f6a4b8930a1e9493c52fe74`. The diff was verified to contain exactly the six intended files: `hw/xfree86/ddc/ddc.c`, `hw/xfree86/ddc/interpret_edid.c`, `hw/xfree86/drivers/video/modesetting/drmmode_display.c`, `include/edid.h`, `include/xf86DDC.h`, and `test/ddc-tests.c`. The two new exact-head Actions runs, `46045249263` and `46045246277`, were queued at this checkpoint. No merge or local build/test is claimed.
+
+Next: poll those exact-head runs, review any failures, and keep the PR Draft until the owner decides otherwise. After Stage 0, continue design work on output capability/mode policy and the already owner-approved linear BT.2020/D65 working-space semantics. Do not implement open RandR, wire-ABI, compositor-handoff or rendering decisions by assumption. In particular, Stage-1 output policy remains an owner decision gate.
