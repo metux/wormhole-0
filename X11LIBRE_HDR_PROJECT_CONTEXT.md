@@ -715,3 +715,13 @@ The owner questioned the mismatch between the stated test scope and the Xtrans i
 - #4230 and #4240 remain based on `d439c01f...`; rebase them onto current master and refresh exact-head CI before merge consideration.
 - #4231–#4233 remain Draft/open/unmerged. No local Xserver build/test has been run.
 - Next: wait/check exact-head CI for #4231–#4233; review the new #4232 tests and code against CI results; then rebase #4230/#4240 and continue HDR receive-side parser design. Do not start outbound FD implementation until its DIX ordering/ownership semantics are resolved.
+
+
+## 2026-11-27 14:20Z — #4232 decoupled from #4231
+
+Correction to the 14:15Z checkpoint: because #4231 is generic MSG_CTRUNC hardening rather than a strict HDR prerequisite, #4232 has now been rebased directly onto current Xserver master and is independent.
+
+- #4231 remains head `4bb84c5e5fa9e9dc60a113d3c60149205a269fa7`, base master `21d70661f216140a6080882b01d2d7bbf20191e4`.
+- #4232 new head `466677ef815294c1a43f56a02def3b02e70c3217`, base same master `21d70661f216140a6080882b01d2d7bbf20191e4`; one signed-off commit. The diff is only the per-read FD count, receive queue allocation failure handling and registered tests. It does not contain #4231's MSG_CTRUNC change and has no PR dependency.
+- #4232 exact-head Actions run `46013779628` is pending; #4231 run `46012395834` queued; #4233 run `46011658495` queued.
+- All remain Draft/open/unmerged. No local build/test claimed.
