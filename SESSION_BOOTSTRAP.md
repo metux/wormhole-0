@@ -376,3 +376,10 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - Watchdog now treats absence of both PID and heartbeat evidence as OFFLINE (rather than implicitly alive); a dedicated regression test covers this.
 - Exact-head run `46005827184` / run 576: plugin typecheck and all plugin tests passed; Go build/vet passed on both Go 1.22 and stable; Go test legs are still running.
 - Previous exact-head run `46005329323` / run 570 was fully green across Go build/vet/tests on both versions, plugin typecheck, 81 plugin unit tests, and production integration test (1/1). Only the final liveness-evidence and dashboard refinements are new since that green run.
+
+### Final PR #39 exact-head verification update — 2026-11-27 13:22Z
+
+- Current PR #39 head: `636c6776790647eeb0e8e89b34a2d16ace167101`, eight commits, 15 files, zero behind master.
+- Latest exact-head Actions run `46006375493` / run 584: plugin typecheck and all plugin tests passed; Go build and vet passed on both Go 1.22 and stable; full Go test legs are running.
+- The production integration test now also asserts strictly monotonic runtime/health observation timestamps, matching the Go reducer's strict stale-event rejection. Simulated assistant completion timestamps are ordered explicitly.
+- Previous exact-head run 576 remains fully green across all Go and plugin checks; only the later dashboard/timestamp refinements are under current CI.
