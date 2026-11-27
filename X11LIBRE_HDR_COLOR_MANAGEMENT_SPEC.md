@@ -2376,3 +2376,89 @@ Keep this work in the modesetting DDX rather than changing generic Xserver core 
 ### Owner decision gate
 
 The RandR output-configuration model and the API that supplies final composed-frame metadata remain open under §9.2/§9.3. Before implementation, the owner must select whether output colorspace/max-bpc are configured through explicit RandR properties or a versioned color-management request, and how the compositor supplies final-frame metadata. No code or property ABI is changed by this audit.
+
+## 30.39 — Atomic output-property integration points (2026-11-27)
+
+Follow-up source audit against `X11Libre/xserver:master` at
+`ba6a3b9ede108bf3538cf7657446d2371b89221b`, focused on the existing RandR
+output-property and modesetting atomic-commit paths. This is source evidence
+and design guidance only; no implementation or output-property ABI is
+authorized here.
+
+### Verified current behavior
+
+- `drmmode_property_ignore()` discards every `DRM_MODE_PROP_BLOB`, so the
+  generic RandR property path cannot expose `HDR_OUTPUT_METADATA`.
+- `drmmode_output_create_resources()` exports generic DRM range and enum
+  properties as RandR properties. `drmmode_output_set_property()` applies
+  those values with `drmModeConnectorSetProperty()`, ignores the ioctl return
+  value, and reports success. This is not a transactional atomic modeset path.
+- `drmmode_output_get_property()` currently returns success without reading
+  back a value; the generic property cache is therefore not a reliable source
+  of effective KMS state.
+- The atomic connector-property table in `drmmode_output_init()` currently
+  registers only `CRTC_ID`. The `connector_add_prop()` helper and
+  `drmmode_crtc_set_mode()` already provide an atomic request path that
+  includes connector, CRTC and primary-plane state, including TEST_ONLY
+  validation before a real modeset commit.
+- Separate atomic transactions also exist for DPMS (`drmmode_set_dpms()`)
+  and output disable (`drmmode_output_disable()`). They currently add
+  connector `CRTC_ID` and CRTC/plane state, not colorspace, max-bpc or HDR
+  metadata.
+- CRTC CTM is currently applied through `drmModeObjectSetProperty()` in
+  `drmmode_set_ctm()`, separately from the modeset transaction. This is a
+  precedent for existing color controls, but not a sufficient model for
+  transactionally switching an HDR output mode and its metadata.
+
+### Design consequences
+
+1. Do not expose the DRM `HDR_OUTPUT_METADATA` blob through the existing
+   generic RandR DRM-property loop. It needs typed validation, blob creation
+   and explicit lifetime handling.
+2. If the owner selects RandR as the user-facing output-configuration API,
+   stage requested colorspace/max-bpc state in the modesetting DDX and apply
+   it through the same atomic request as the relevant connector/CRTC/plane
+   state. Do not use the current generic `drmModeConnectorSetProperty()`
+   setter as the HDR implementation.
+3. Treat the final-frame metadata blob as separate state from sink EDID
+   capabilities and from source-window Color Descriptions. It must be supplied
+   by the selected composition/output policy, validated, and committed with
+   the matching output mode.
+4. Define explicit clearing behavior when leaving HDR, disabling an output,
+   losing the metadata source, or hot-unplugging. In particular, an old
+   `HDR_OUTPUT_METADATA` blob must not remain attached after switching back
+   to SDR merely because a later atomic request omitted that property.
+5. A failed TEST_ONLY or real commit must leave the previous effective state
+   intact and must not report RandR success. Requested state and committed
+   state therefore need to be distinguishable; do not update the public
+   property value before a successful commit.
+6. Every atomic path that can change connector/CRTC association or disable an
+   output must preserve or deliberately clear the staged color properties.
+   Cover normal modesets, DPMS, output disable, hotplug/reprobe, and cloned
+   outputs. Connector properties are per output, while multiple connectors
+   may share one CRTC.
+
+### Required tests before implementation
+
+- Property discovery with absent, wrongly typed, immutable, or unsupported
+  Colorspace/max-bpc/HDR metadata properties.
+- TEST_ONLY rejection and real atomic-commit failure, with requested and
+  committed state remaining consistent.
+- HDR-to-SDR transition clears the metadata blob; output disable and hotplug
+  do not retain stale blob IDs or property values.
+- DPMS and ordinary mode changes preserve the selected state when appropriate.
+- Cloned outputs with different sink capabilities do not accidentally share
+  an invalid output transform or metadata state.
+- Blob creation/destruction and replacement under success, failure and
+  teardown, with no premature destruction while a commit may still reference
+  the blob.
+- Legacy generic RandR properties and existing SDR modesetting behavior remain
+  unchanged when the HDR feature is absent or not negotiated.
+
+### Owner decision gate remains open
+
+The user-facing output configuration model (RandR properties versus a
+versioned color-management request) and the authority/source for final composed
+frame metadata are still unresolved. This audit narrows the internal
+modesetting integration point but does not choose either API. No Xserver code
+or RandR property ABI was changed.
