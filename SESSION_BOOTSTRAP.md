@@ -369,3 +369,10 @@ Next Starfleetctl actions: obtain Discovery's actual immutable PR #23 review rep
 - The combined implementation adds a Go `runtime.update` reducer with per-dimension event-ID idempotency and timestamp ordering, preserves manual task state, serializes status writers, derives heartbeat expiry from the actual configured interval, and exposes task/runtime/health separately through board and web API.
 - Enterprise runtime prerequisite verified: OpenCode CLI + resolved SDK `1.19.3`, actually loaded plugin `2.5.20`, with PID/session corroboration (wormhole report `w0-20261127T115954Z-56e1924aa08a321e`).
 - No merge, ship restart, or deployment has been performed. Next: finish both Go test legs, review the entire combined diff including dashboard presentation, then report merge readiness for owner approval.
+
+### PR #39 dashboard + liveness refinements — 2026-11-27 13:18Z
+
+- Current PR #39 head: `07e63154e3a24361eaa700997dde40e3e931cb52`, four commits, 15 files, zero behind master. The fleet board and ship detail now display task state, runtime state, and model health separately; health reason is available in tooltip/detail.
+- Watchdog now treats absence of both PID and heartbeat evidence as OFFLINE (rather than implicitly alive); a dedicated regression test covers this.
+- Exact-head run `46005827184` / run 576: plugin typecheck and all plugin tests passed; Go build/vet passed on both Go 1.22 and stable; Go test legs are still running.
+- Previous exact-head run `46005329323` / run 570 was fully green across Go build/vet/tests on both versions, plugin typecheck, 81 plugin unit tests, and production integration test (1/1). Only the final liveness-evidence and dashboard refinements are new since that green run.
