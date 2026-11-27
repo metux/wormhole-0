@@ -548,3 +548,13 @@ Recommended remediation order: (1) web/proxy security boundary and symlink-safe 
 - Current compare against master: diverged, 3 commits ahead and 7 behind; final changed paths remain .github/workflows/build-xserver.yml and test/xtest.c. Rebase deferred until the focused ASan result is available.
 - No local build/test was run by ChatGPT (no local xserver checkout/terminal access in this session). No vulnerable-vs-fixed red/green run has yet been executed. No review approval; do not merge. Owner retains merge authority.
 - Next: collect the ASan xtest_test result and inspect its log to prove the test ran; finish remaining exact-head CI; if green, run a controlled vulnerable-parent red check and rebase against current master, then require fresh exact-head CI and review before asking owner about merge.
+
+### Issue #40 continuation checkpoint — 2026-11-27 16:40Z
+
+- Revalidated `mpbt-hq/starfleetctl`: master remains `9d01e0470a9ec1d9f7740bc608ff59c3b8403a03`; feature branch `feat/session-stable-pty-restart` is reset to `0143ba022e28b567a738427f06154c0433de1827`, 8 commits ahead and 0 behind.
+- Draft PR [#41](https://github.com/mpbt-hq/starfleetctl/pull/41) is the single working PR and remains explicitly draft/not ready for review.
+- The branch contains preparatory safety work only: model validation before restart, bounded newline-terminated control-socket I/O, explicit positive acknowledgement, clear unsupported-mode diagnostics when the socket or parent directory is absent, and regression tests for these cases. No persistent in-PTY runner, OpenCode process-group handoff, or real-PTY integration tests are present on the branch.
+- Exact-head GitHub Actions run `46034385376` for `0143ba0` completed successfully: Go 1.22 and stable both passed build, vet, and full tests; plugin typecheck/tests passed. This validates only the preparatory branch.
+- Enterprise testbed requests `w0-20261127T162751Z-chatgpt-issue40-testbed-status`, `w0-20261127T163154Z-chatgpt-issue40-testbed-nudge2`, and `w0-20261127T163410Z-chatgpt-issue40-testbed-command` are all in `mail/Enterprise/processed/`. No explicit acknowledgement, worktree details, `make all` result, or real-PTY capability report has been found. Import is not acknowledgement.
+- No local/testbed or real-PTY tests have been run by ChatGPT; no live ships/processes have been signalled, restarted, stopped, or deployed.
+- Next: wait for Enterprise's explicit testbed report. Once a disposable testbed is confirmed, implement the PTY-resident supervisor and process-group/foreground handoff on this same branch, then run `make all` and real-PTY regression tests there. Do not mark PR #41 ready, merge, or deploy before those tests pass.
