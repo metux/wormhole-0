@@ -446,3 +446,47 @@ Additional source-level findings on `mpbt-hq/starfleetctl:master` (still read-on
 - **Session launch review:** `LaunchShip` contains separate API/PTY command-construction paths and duplicates identity setup between child environment and shell exports; `spawnSessionAt` also sets process-global `PROJECT` when `ReleaseFull` is present without restoring it. Consolidate this into a single typed launch plan and pass project identity explicitly rather than mutating the parent process environment.
 
 Recommended remediation order: (1) web/proxy security boundary and symlink-safe file access; (2) SSE flush + post-commit retry + breaker accounting; (3) pooled provider transports and coherent catalog cache; (4) graceful/shared daemon lifecycle; (5) split large packages by responsibility and replace CLI-output capture with typed application APIs; (6) align config/docs and rewrite the architecture map. Avoid a wholesale rewrite of the file-backed Comms/Wormhole core.
+
+
+## Starfleetctl follow-up — PR #39 merged + owner feature requests (2026-11-27)
+
+### PR #39 merge / rollout gate
+
+- Owner authorized merge after careful review. Exact PR head: `0954afb99436c6f9e759bc605b718aa5a9956869`.
+- Exact-head PR CI run `588` / `46011421915`: completed successfully. All steps passed:
+  - Go 1.22.x: build, vet, full tests (`go test ./... -count=1 -timeout 300s`)
+  - Stable Go: build, vet, full tests
+  - Plugin typecheck/bundle and plugin unit tests
+- PR was one commit, ready for review, mergeable, 0 commits behind master. Repository disables native squash and merge commits; used rebase merge to preserve one-commit history.
+- Merged successfully at `2026-11-27T14:16:41Z`. Result/master commit: `9d01e0470a9ec1d9f7740bc608ff59c3b8403a03`, subject `feat(status): separate runtime health from task state`, includes DCO sign-off. PR: https://github.com/mpbt-hq/starfleetctl/pull/39
+- PR #39 is closed/merged. Issue #30 remains open for now; verify acceptance/production behavior after owner deploy before closing. No local tests or fleet restart/deployment were performed by ChatGPT.
+- **Owner may now deploy/restart Starfleetctl to activate PR #39.** After deployment, verify real plugin heartbeats, turn lifecycle events, and dashboard state before closing #30.
+
+### Owner clarification on security scope
+
+- HTTP authentication on the web frontend is explicitly deferred by owner for now. Web UI is currently local/LAN-only by design; binding to `0.0.0.0` is intentional on the small trusted LAN, and a proper auth layer may later be provided by a reverse proxy. Do not make web auth or changing the bind default a blocking task without renewed owner direction.
+- This does not invalidate the separate technical need for symlink-safe workspace file containment and bounded request handling. Keep those as hardening items, but do not overstate the current LAN deployment as an accidental public exposure.
+- Model-proxy authentication is a separate trust-boundary question; inspect actual bind/use cases before proposing a change. Do not conflate it with deferred webfrontend auth.
+
+### Owner-requested Starfleetctl feature backlog (new; no implementation claimed)
+
+1. **Console-ship child restart without terminal loss (high priority).** Remote restart of the OpenCode child process for console-attached ships, keeping the supervisor/parent process and the exact same TTY alive. Must support plugin reload and recovery from hung OpenCode children; optionally select a new model. Existing pieces:
+   - `session restart <id> [--model <model>]` and web `POST /api/ships/<id>/restart` already exist.
+   - `LaunchShip` has a Unix control socket with `RESTART`/ `STOP` / `STATUS`, and restarts its managed `termctl-run` child.
+   - This is only partial: current restart kills/recreates `termctl-run`, so it does not yet establish the owner-required invariant that the same terminal/TTY survives while only the OpenCode child is replaced. Need map each launch mode (console/PTY, background, API) and implement a supervisor that owns the stable PTY and restarts only the OpenCode child inside it. Add integration tests asserting stable parent PID, PTY/pipe identity, and successful plugin reload after restart; add safe timeout/kill escalation for hung children.
+2. **Model change from CLI and web (high priority).**
+   - CLI `session restart <id> --model <model>` and the web ship-restart endpoint already accept a model.
+   - PR #39 adds/retains a model selector in the ship detail UI; verify it targets the intended ship and is correctly persisted/projected.
+   - Direct in-session model switching should be used if supported by the OpenCode runtime; otherwise route through the safe child-only restart in item 1. Validate model availability before changing state and report the effective model only after the new child is confirmed started. Do not claim current restart is TTY-preserving.
+3. **Wormhole repository history truncation (medium priority; design first).** Owner wants old history removed, considering grafts/rebase. Compare an orphan-root snapshot/controlled history rewrite against git replace/grafts (local/non-portable or deprecated semantics) and archive strategies. Must preserve current active `mail/*/new` messages, decisions, collaboration protocol and current tree; never replay frozen legacy inbox/outbox. Plan coordinated force-update + clone reinitialization for all consumers, verify no manager-owned lifecycle files are lost, and retain an offline audit archive if desired. No rewrite until an explicit cutover plan and owner approval.
+4. **Fleet-status sync through Wormhole (medium priority).** Provide ChatGPT with a compact, periodic/on-demand status snapshot through the existing Wormhole spool, so remote review can see the owner's local fleet state without pretending to have direct local process access. Starfleetctl remains authoritative for task/status; Wormhole carries immutable snapshots/reports only, not a second task tracker. Include timestamp, workspace identity, ship IDs, process/heartbeat/runtime/health, active task refs, and source freshness; distinguish unavailable/stale from idle. Use a dedicated ChatGPT mailbox message with protocol preflight, and do not write manager-owned lifecycle directories.
+5. **Reusable Git/GitHub helper packages (medium priority).** Current source shows duplicated Git process helpers in `internal/util/git.go` and `internal/ghpr/git.go`; GitHub CLI orchestration lives in `cmd/starfleetctl/github.go` and `internal/ghpr`. Design exported, independently reusable packages (likely `pkg/git` and `pkg/github`, or separate modules if dependency boundaries require) with typed inputs/results, context/timeouts, explicit IO, and no global process mutation. Keep Starfleetctl CLI adapters thin. Inventory other repositories' needs before fixing public API; avoid prematurely exporting current internal abstractions.
+6. **Architecture cleanup / Proxy (ongoing).** Prioritize SSE response-writer flushing and post-commit retry correctness; strategy metric/breaker correctness; provider transport reuse and independent/coherent cache freshness; daemon graceful shutdown; decomposition of `modelproxy.Proxy`; typed application services to replace CLI output capture. Keep Comms/Wormhole's durable/idempotent transport boundaries.
+7. **Workspace file containment / bounded HTTP resources (hardening).** Symlink-safe path resolution and body/server limits remain technical debt even though web auth/bind changes are deferred.
+
+### Immediate next sequence
+
+- Wait for owner deployment of master commit `9d01e0470a9ec1d9f7740bc608ff59c3b8403a03`; then independently verify PR #39 runtime behavior and issue #30 acceptance before closing.
+- In parallel, prepare scoped design/test plans for stable-TTY child restart and model change. Start with a launch-mode/process-tree map and tests; do not restart any owner console ship without explicit instruction.
+- Next, design Wormhole truncation and status sync without changing the spool until migration/format decisions are agreed.
+- Then introduce reusable Git/GitHub packages with compatibility tests and migrate duplicate call sites incrementally.
