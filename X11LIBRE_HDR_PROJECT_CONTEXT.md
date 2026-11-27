@@ -773,3 +773,15 @@ Xserver master: `325ba5ebb80ed97bb5387ec7b6f69d38bc40f8bb`.
 - Scope: #4240 provides safe, read-only EDID/CTA/HDR sink capability parsing. It does not enable KMS output mode changes, HDR metadata signaling, client protocol or rendering.
 - Next: poll exact-head CI and address failures; keep #4240 Draft pending owner decision. Then continue the output capability/mode design and other HDR architecture decisions. Do not start generic Xtrans or DIX refactoring.
 - No Wormhole message was sent; this is a durable project checkpoint only.
+
+
+## 2026-11-27 18:10Z — Stage-1 modesetting output-path audit
+
+Reviewed current Xserver master `9b99e420eab37f57ac69a733d809782ed99791fe` in `hw/xfree86/drivers/video/modesetting/drmmode_display.c`.
+
+- The generic RandR output-property code exposes DRM connector range/enum properties, but `drmmode_property_ignore()` ignores all blob properties, including `HDR_OUTPUT_METADATA`.
+- Generic range/enum updates call `drmModeConnectorSetProperty()`, not an atomic transaction, and the return value is ignored before reporting success. This is not a reliable HDR path for atomic-only connector properties.
+- The dedicated atomic connector property table currently registers only `CRTC_ID`; no Colorspace, max-bpc or HDR metadata properties are registered/committed. Existing atomic connector helpers and blob creation for modes/CTM are precedents for a modesetting-DDX implementation.
+- Conclusion: no current HDR output-mode/signaling support. Future implementation should be modesetting-DDX-local, commit colorspace/max-bpc and a separately supplied final-frame HDR metadata blob atomically, and fail/rollback without disturbing SDR. Sink EDID capability must not be copied as frame metadata.
+- This remains design only. RandR output configuration and compositor final-frame metadata source are still owner decisions (§9.2/§9.3); no code, generic core API or RandR property ABI changed.
+- PR #4240 exact head `865d56ccb91e7c202f6a4b8930a1e9493c52fe74`, based on master `9b99e420eab37f57ac69a733d809782ed99791fe`. Runs `46045249263` and `46045246277` remain active; no failure observed. The latter includes `abi-changes-check`, still in progress at the last poll.
