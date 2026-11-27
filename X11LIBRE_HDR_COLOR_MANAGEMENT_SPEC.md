@@ -2266,3 +2266,27 @@ The owner reviewed the scope of PRs #4231 and #4232 and requested that they cont
 ## 30.33 — DIX treats Xtrans receive errors as fatal
 
 Current Xserver master `21d70661f216140a6080882b01d2d7bbf20191e4` `os/io.c:ReadRequestFromClient()` converts only would-block errors into a normal not-ready/yield path. Any other negative `_XSERVTransRead()` result is returned as a fatal read error to request processing. Therefore #4231's `EMSGSIZE` and #4232's `ENOMEM` abort the client read path; the server does not continue parsing later requests while retaining a partial ancillary FD queue. This is source-level confirmation, not a local runtime test.
+
+
+## 30.34 — Xserver C style, receive-queue cleanup and refreshed PR heads (2026-11-27)
+
+Owner-wide Xserver C conventions are recorded in `decisions/2026-11-27--xserver-coding-style.md`: declare variables close to first use where practical; brace all control-flow bodies; keep function return type and name on the same line. Applied to newly added helper/test functions in #4231 and #4232.
+
+Current Xserver master is `325ba5ebb80ed97bb5387ec7b6f69d38bc40f8bb` (includes #4233).
+
+### PR #4231 — truncated SCM_RIGHTS
+
+- Head: `6cd70b3a33f0b934f1dc492b158b3fa91ea0fa3e`; one signed-off commit, based directly on current master.
+- In addition to closing descriptors installed from the truncated control buffer, the error path now discards and closes descriptors already present in the connection receive queue. This makes the failed read immediately fail-closed instead of depending solely on eventual connection teardown.
+- Regression test now seeds a previously queued FD before sending 129 descriptors, then verifies both the prior queued FD and descriptors installed by the truncated recvmsg are closed.
+- Exact-head Actions run `46022322395` was pending/queued at the latest poll.
+
+### PR #4232 — receive count and allocation failure
+
+- Head: `909a70fd4b4d03a29a60edeb24dd26cff290b31b`; one signed-off commit, based directly on current master and independent of #4231.
+- `appendFd()` remains in the code only for the existing send queue call from `_XSERVTransSocketSendFd()`. The old receive-queue use is replaced by `appendRecvFd()`, whose distinct error contract lets the caller close the complete failed receive group and clear the whole queue without changing send-path ownership semantics.
+- Added a regression test for the existing local Xtrans connection-close cleanup: a received FD intentionally left queued must be closed by `_XSERVTransClose()`.
+- DIX request-boundary cleanup is separate: `ReadRequestFromClient()` drains any remaining `client->req_fds` through `ReadFdFromClient()` and closes them. This path is unchanged and was source-reviewed; the new Xtrans unit test covers connection teardown, not the DIX request-completion path.
+- Exact-head Actions run `46022152207` was pending/queued at the latest poll.
+
+Both PRs remain Draft/open/unmerged. CI is not green yet; no local build or test run is claimed.
