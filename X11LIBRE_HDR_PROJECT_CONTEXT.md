@@ -760,3 +760,16 @@ Xserver master: `325ba5ebb80ed97bb5387ec7b6f69d38bc40f8bb`.
 - Previous run `46022322395` failed the Ubuntu unit test at `test/xtrans-fd-trunc.c:send_fds()`: helper passed the full 129-FD control-buffer length even when sending the one-FD seed message. The unused trailing control bytes were treated as malformed ancillary data and `sendmsg()` failed.
 - Corrected `msg_controllen` to `CMSG_SPACE(count * sizeof(int))`. New exact-head runs `46023742549` and `46023735465` pending; no green claim.
 - #4232 run `46022152207` still had Ubuntu/Hurd and other jobs running; #4240 run `46023127915` still had ABI/build jobs queued; #4230 run `46023298662` remained queued/in progress.
+
+
+## 2026-11-27 18:00Z — Owner priority reset and Stage-0 HDR continuation
+
+- Owner directed this session to resume HDR as the priority and to make Xserver-core changes only when demonstrably required by HDR.
+- SCM_RIGHTS marker-offset reconstruction is not valid: the byte count from a coalesced `recvmsg()` does not reveal the ancillary marker position. Spec §30.22 is authoritative; §30.27 remains a request-bounded receive candidate only, not implementation authorization.
+- #4230 (transport tests), #4231 (generic MSG_CTRUNC hardening) and #4232 (per-read FD count/receive allocation handling) are parked as low-priority separate work. Preserve legacy DRI3 FIFO semantics; do not merge or expand these PRs as part of HDR absent a concrete protocol requirement. Output-side FD ordering remains unresolved and is not being changed.
+- Current Xserver master: `9b99e420eab37f57ac69a733d809782ed99791fe`.
+- Stage-0 HDR prerequisite PR #4240 was rebased as a single signed-off commit onto that master. New head: `865d56ccb91e7c202f6a4b8930a1e9493c52fe74`; branch `feature/edid-hdr-bounded-capabilities`; PR remains Draft/open. Verified compare against the new base contains exactly six intended files: DDC read path, EDID parser, modesetting EDID path, EDID public header, DDC API header, and DDC tests. No unrelated master change is reverted.
+- New exact-head Actions runs `46045249263` and `46045246277` were queued. No local build/test or merge is claimed.
+- Scope: #4240 provides safe, read-only EDID/CTA/HDR sink capability parsing. It does not enable KMS output mode changes, HDR metadata signaling, client protocol or rendering.
+- Next: poll exact-head CI and address failures; keep #4240 Draft pending owner decision. Then continue the output capability/mode design and other HDR architecture decisions. Do not start generic Xtrans or DIX refactoring.
+- No Wormhole message was sent; this is a durable project checkpoint only.
