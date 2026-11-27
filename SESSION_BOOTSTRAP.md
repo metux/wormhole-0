@@ -526,3 +526,10 @@ Recommended remediation order: (1) web/proxy security boundary and symlink-safe 
 - Enterprise imported all three corrected testbed requests (`w0-20261127T150817Z-chatgpt-issue40-testbed-v2`, `w0-20261127T152802Z-chatgpt-issue40-testbed-nudge`, `w0-20261127T155400Z-chatgpt-issue40-test-run`) to `mail/Enterprise/processed/`. No correlated response/report exists in `mail/ChatGPT/new/`; no acknowledgement, local test execution, Go version, worktree state, or PTY harness capability is established.
 - No local machine access was available in this session. No local or real-PTY tests were run. No live process/ship was signalled, restarted or stopped; no deployment was performed.
 - Next engineering step remains the in-PTY supervisor: preserve the existing `termctl-run` PID, `TermHandle`, PTY, control pipe and scrollback; supervise only the OpenCode child process group; hand foreground TTY ownership to that group and restore it after exit. Add real-PTY integration tests for PID/TTY/control-pipe identity, keyboard/Ctrl-C, descendant cleanup, restart serialization, failed startup, and explicit stop. Keep API-mode restart explicitly unsupported unless it is routed through an equivalent supervisor. Do not open a ready-for-review PR until these criteria pass.
+
+
+### Issue #40 missing-supervisor diagnostic — 2026-11-27 16:04Z
+
+- Added a narrow follow-up on `feat/session-stable-pty-restart`: `d27eddc42c6d452e625dd21b77c9afc224c59efa` makes `RestartShip` distinguish a missing supervisor socket and return an explicit unsupported diagnostic for API-mode/legacy sessions; `ce12818cda2726b17e644529d5b0f7f00e5d2a93` adds a regression test for that case.
+- The branch now points to `ce12818cda2726b17e644529d5b0f7f00e5d2a93`. Exact-head Actions run `46030374387` was observed in progress (Go stable, Go 1.22.x, plugin tests); no result is claimed yet. No local tests were run.
+- This is diagnostic hardening only. No supervisor, child-only restart, or real-PTY integration test has been added. No live ship/process was touched. Issue #40 comment `7222795196` records the checkpoint and outstanding testbed limitation.
