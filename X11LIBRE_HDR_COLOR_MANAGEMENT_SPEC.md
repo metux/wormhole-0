@@ -2290,3 +2290,29 @@ Current Xserver master is `325ba5ebb80ed97bb5387ec7b6f69d38bc40f8bb` (includes #
 - Exact-head Actions run `46022152207` was pending/queued at the latest poll.
 
 Both PRs remain Draft/open/unmerged. CI is not green yet; no local build or test run is claimed.
+
+
+## 30.35 — Refresh and review of remaining HDR/Xtrans PRs (2026-11-27)
+
+Current Xserver master remains `325ba5ebb80ed97bb5387ec7b6f69d38bc40f8bb`. The two PRs previously based on the older `d439c01f...` have now been reconstructed as single-commit branches directly on current master:
+
+- **#4230** head `ac72f4d7dcfdfc6a6e4d2922a28e2cc3db4e3cdb`, exact-head run `46023298662` pending. The Linux AF_UNIX framing test remains a separate kernel-behavior regression. Applied the Xserver C style rules to its new function definitions and braced the remaining loop body.
+- **#4240** head `2019df16d73b7061a8fff8b2791803e5ec355bad`, exact-head run `46023127915` queued. EDID length-bound parsing, extension traversal guards, CTA data-block bounds, and DDC/modesetting size-aware parser integration are retained. Applied the C style rules to new/modified helper definitions and the modified CTA iteration loop; corrected the `xf86ParseEDID()` parameter documentation to refer to `pScreen`.
+
+### Current exact-head CI
+
+| PR | Head | Actions run | Latest observed state |
+|---|---|---:|---|
+| #4230 | `ac72f4d7...` | `46023298662` | pending |
+| #4231 | `6cd70b3a...` | `46022322395` | queued/in progress |
+| #4232 | `909a70fd...` | `46022152207` | queued/in progress |
+| #4240 | `2019df16...` | `46023127915` | queued |
+
+All four PRs remain Draft/open/unmerged. Do not rely on successful runs from superseded heads.
+
+### #4240 review notes
+
+- The new `rawDataLen` member is appended to the public `xf86Monitor` structure; existing member offsets remain unchanged, but this is an ABI-visible structure-size extension. The workflow's `abi-changes-check` is pending and must be inspected before treating the PR as ready.
+- Size-aware parsing copies the supplied EDID bytes into the returned monitor allocation, allowing DDC and modesetting callers to free their input buffers safely.
+- The legacy pointer-only `xf86InterpretEDID()` / `xf86InterpretEEDID()` contract remains explicitly documented as requiring storage for all advertised extensions; `rawDataLen == 0` preserves that legacy behavior.
+- DIX/Xtrans and EDID changes have not been locally built or run in this session. CI remains the current validation source.
