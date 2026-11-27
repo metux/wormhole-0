@@ -2316,3 +2316,12 @@ All four PRs remain Draft/open/unmerged. Do not rely on successful runs from sup
 - Size-aware parsing copies the supplied EDID bytes into the returned monitor allocation, allowing DDC and modesetting callers to free their input buffers safely.
 - The legacy pointer-only `xf86InterpretEDID()` / `xf86InterpretEEDID()` contract remains explicitly documented as requiring storage for all advertised extensions; `rawDataLen == 0` preserves that legacy behavior.
 - DIX/Xtrans and EDID changes have not been locally built or run in this session. CI remains the current validation source.
+
+
+## 30.36 — #4231 regression-test correction after CI failure (2026-11-27)
+
+- #4231 exact head is now `6e7a8004d053534578e5d976b4e91d45c395b3c5`, based on current master `325ba5ebb80ed97bb5387ec7b6f69d38bc40f8bb`.
+- Previous exact-head run `46022322395` exposed one real unit-test failure: `test/xtrans-fd-trunc.c:send_fds()` used the full 129-FD control-buffer length even when sending the one-FD seed message. The unused trailing control bytes could be interpreted as another malformed cmsghdr, so `sendmsg()` failed.
+- Fixed the helper to set `msg_controllen = CMSG_SPACE(count * sizeof(int))` for each message. The 129-FD test still uses the full control buffer; the prior-FD seed now uses the correct one-FD control length.
+- New exact-head Actions runs `46023742549` and `46023735465` were pending at the latest poll. The old run's Ubuntu unit failure is superseded by this correction; do not treat the new head as green until its own CI completes.
+- #4232 run `46022152207` continued with Ubuntu, Hurd and other jobs in progress; #4240 run `46023127915` still had ABI/build jobs queued. #4230 run `46023298662` remained queued/in progress.
