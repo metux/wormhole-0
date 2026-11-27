@@ -553,3 +553,58 @@ All four replacement PRs are draft, each contains exactly one commit, and CI was
 - Current #4232 head is now 2429f7f00860501602a86452f59b037895a0c925, parent #4231 current head 60a22b75864952817bd1589deac81571574ce5a7. The actual PR patch now lists exactly five files: os/Xtranssock.c, test/meson.build, test/tests.c, test/tests.h, test/xtrans-fd-alloc.c. Exact-head CI run 45905471008 is pending.
 - #4231 remains at 60a22b75864952817bd1589deac81571574ce5a7 with run 45904923410 pending.
 - No PR merged. Current #4232 remains based on #4231; after #4231 merges, rebase/retarget #4232 to updated master and rerun CI.
+
+
+## 2026-11-27 — Request-bounded FD reads: new candidate framing strategy
+
+A standalone Linux AF_UNIX/SOCK_STREAM C test supports a simpler receive-side candidate than the byte-offset design withdrawn in section 30.22:
+
+- Sender writes one four-byte ordinary request, then sends an eight-byte FD-bearing request with one SCM_RIGHTS FD in a single sendmsg().
+- Receiver calls recvmsg() with an iovec length of exactly four bytes each time.
+- The first read returns only the ordinary request with no FD; the second returns the FD-bearing request header with the FD; the third returns the remaining request body without an FD.
+
+Candidate HDR-only approach, recorded in spec section 30.27: after the compositor-acquisition round-trip barrier, disable X request read-ahead for that negotiated client. Read only the fixed request header at each request boundary, expose the per-read FD count from Xtrans, parse the request length (including BIG-REQUESTS), then read exactly the remaining body. FDs delivered during the header read belong provisionally to that request; FDs delivered during body reads are invalid. Require one sendmsg FD group at the first request byte, validate its exact count, and retain FIFO ownership/consumption. This preserves legacy DRI3 behavior and avoids inferring byte offsets. It remains a candidate only; the Xserver parser, partial headers, swapped clients, BIG-REQUESTS, pipelining and teardown still need implementation tests.
+
+Separate output blocker: FlushClient() may have older buffered output after EAGAIN. Since Xtrans attaches queued FDs to the first byte of the next write, an FD-bearing reply could be attached to earlier output. HDR needs an ordered (reply bytes, FD group) output segment and a backpressure regression. Do not change legacy WriteFdToClient() without proving DRI3 compatibility.
+
+Current Xserver SCM_RIGHTS PRs after test hardening:
+- #4230 head 78c26212b21827f12cfacdf4ea46fb5de3847c21 (AF_UNIX framing tests; CI runs 45912451759 and 45912456525 queued at this refresh).
+- #4231 head fd0443f1d0e79fcaf2eb3f30b43963e5edbc5a32 (MSG_CTRUNC handling; CI runs 45912011180 in progress and 45912016553 queued).
+- #4232 head cbda1699a7e7d06ff4040712eeafb4760734c326, parent #4231 head (FD queue allocation failure; CI runs 45912464958 and 45912470661 pending/queued). #4232 remains stacked on #4231 and must be retargeted/rebased after #4231 is merged.
+- All three remain Draft; no review or merge is claimed. Their commits carry the owner-authorized DCO trailer. No local Xserver build/test has been run.
+
+## 2026-11-27 — Atomic multi-FD send queueing found necessary for DRI3 safety
+
+A call-site audit of WriteFdToClient() found that DRI3 BuffersFromPixmap queued multiple plane FDs one by one. If a later append failed, its old error path closed earlier descriptors that had already transferred to Xtrans, leaving stale FD numbers in the send queue. The single-FD allocation test did not cover this.
+
+Xserver PR #4232 now adds an atomic SendFds/WriteFdsToClient path: allocate the entire queue-node group before publishing any node; on failure leave every FD caller-owned and leave the queue unchanged; on success preserve order and do_close semantics. DRI3 BuffersFromPixmap now queues all plane FDs in one batch and closes all of them only if that batch enqueue fails. Existing single-FD WriteFdToClient callers and successful DRI3 reply format are unchanged.
+
+Regression tests inject failure on the second node of a two-FD batch, verify both caller FDs remain open, and verify the next ordinary transport write carries no partial FD group. A success test verifies both descriptors arrive together and the sender copies close after transmission.
+
+Current #4232 exact head: a505c8d19bc32d28d7b43a0da93d58372b24bd47, parent #4231 head fd0443f1d0e79fcaf2eb3f30b43963e5edbc5a32. Exact-head CI runs 45913594000 and 45913600239 are queued/in progress. The PR remains Draft; no build/test result is claimed yet. This batch change is necessary to make send-side allocation failure safe for multi-FD DRI3 replies, but does not solve the independent output-buffer/EAGAIN ordering issue recorded in spec section 30.27.
+
+## 2026-11-27 — Current exact-head transport PR refresh
+
+- #4230 head 51b4086038600c50463fd76f530dc48d718a0a88 now registers request-bounded partial-header and multiple-groups-within-one-request tests; exact-head runs 45915160161 and 45915153363 are pending.
+- #4231 head fd0443f1d0e79fcaf2eb3f30b43963e5edbc5a32 is green on both exact-head CI runs: 45912011180 (20 passed, 5 skipped) and 45912016553 (18 passed, 7 skipped); DCO check passed.
+- #4232 head b0174238f714c077574d8948e1382bebc74354e5 is stacked on #4231 and adds atomic multi-FD SendFds/WriteFdsToClient queueing plus the DRI3 multi-plane call-site fix. Runs 45913945592 and 45913950660 are in progress. The previous intermediate head had a SendFd/SendFds dispatch mismatch; current head fixes it and awaits CI.
+- #4230–#4232 remain Draft, unreviewed and unmerged. #4232 must be retargeted/rebased after #4231 merges. No local Xserver build/test is claimed.
+- Request-bounded receive remains a candidate only; the Xserver parser and libxcb have not been changed. The separate output-buffer/EAGAIN ordering issue remains unresolved.
+
+## 2026-11-27 — Candidate HDR output ordering without changing legacy DRI3
+
+The output-side blocker may be addressed in v1 without a general output-segment queue, but only through a private HDR reply helper and dedicated tests:
+
+- Flush all pre-existing output before queueing the FD group.
+- If old bytes remain pending after EAGAIN, return WOULD_BLOCK/BUSY without queueing the new FDs; the caller retains ownership and can retry or send a non-FD status reply.
+- Ensure reply-buffer capacity before queueing, then atomically queue the complete FD group and write the reply via dixWriteToClient() while the output buffer is empty.
+- If the reply's own sendmsg() gets EAGAIN before any byte is sent, the FD group remains queued with that reply. If a partial write succeeds, the group is transferred with the first bytes and the remainder is sent without ancillary data.
+- Before a second FD-bearing reply, flush the first reply completely; otherwise return WOULD_BLOCK and do not queue another group.
+
+This is a candidate only. It needs a DIX-level test for prior buffered output, EAGAIN before the first byte, partial writes, and a second FD reply while the first remains pending. It must not alter legacy WriteFdToClient()/DRI3 behavior without separate compatibility tests.
+
+## 2026-11-27 — ReadRequestFromClient integration point
+
+Current os/io.c:ReadRequestFromClient() computes the exact number of bytes still needed for the current xReq, BIG-REQUESTS header, or request body, but its transport read currently asks for all remaining input-buffer capacity (oci->size - oci->bufcnt), allowing read-ahead into subsequent requests.
+
+For HDR-negotiated clients only, cap the read length to needed - gotnow. Track request_read_index and accumulated request_fd_count in the private ConnectionInput/OsComm state: after each positive read, accept a nonzero _XSERVTransGetLastReadFdCount() only on the first positive read of the request; reject any later nonzero read. Once the full request is assembled, expose the accumulated count to the HDR handler for comparison with the request's declared FD count before it consumes the FIFO. Enable only after the compositor-acquisition round-trip barrier and reject activation if bytes beyond the negotiation request are already buffered. EAGAIN/zero-byte reads do not advance the read index. This parser change is the next implementation task and is not included in the current Xserver PRs.
