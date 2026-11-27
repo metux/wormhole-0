@@ -2194,3 +2194,18 @@ This is only a candidate, not yet demonstrated safe. In particular, audit `Flush
 - Verify the legacy DRI3 `WriteFdToClient()` path remains unchanged unless a separate compatibility fix is deliberately reviewed.
 
 Do not claim the existing `FlushClient()` return value proves output drained: EAGAIN returns 0 while leaving `oc->output` and its pending byte count live. The implementation must inspect the queue state or use a stronger result contract. No HDR send helper, Xserver code or test was changed by this design note.
+
+
+## 30.29 — Transport confirmation of next-write FD attachment
+
+Follow-up source audit of `X11Libre/xserver:master` `os/Xtranssock.c` confirms the lower-level behavior behind section 30.28:
+
+- `_XSERVTransSocketSendFd()` appends descriptors to the connection's `send_fds` list and returns success after calling `appendFd()`.
+- `_XSERVTransSocketWrite()` checks that list and, when non-empty, builds one SCM_RIGHTS control message containing the queued descriptors and calls `sendmsg()` with the entire byte range passed by DIX.
+- If `sendmsg()` returns a positive byte count, the queued descriptors are discarded from the send list even if the byte count is shorter than the requested reply. This is consistent with ancillary data being transferred with the first successfully sent byte; the remaining reply bytes continue later without resending the FDs.
+- If `sendmsg()` fails with EAGAIN before sending bytes, the descriptors remain queued for the next transport write.
+- The current `appendFd()` allocation failure path closes the FD but returns no error; `_XSERVTransSocketSendFd()` nevertheless returns 0. The proposed #4232 work is intended to repair this distinct queue-allocation contract.
+
+Combined with DIX's retained output buffer, the failure mode is concrete: a queued FD group may be delivered with the first successfully written prefix of an older pending output buffer. If the first retry gets EAGAIN, the group remains queued and may attach on a later flush; if a later sendmsg succeeds with a short positive write, the group is consumed with that prefix, even if it is not the intended reply.
+
+This further confirms that a “flush first, then queue FDs” mitigation must prove the old output is fully drained before staging the descriptors, and must ensure no other output can be emitted before the target reply. The long-term ordered-segment API remains the safer abstraction. This is source inspection only; no dynamic DIX regression or implementation change has been made.
