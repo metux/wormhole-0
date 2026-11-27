@@ -549,7 +549,7 @@ Recommended remediation order: (1) web/proxy security boundary and symlink-safe 
 - No local build/test was run by ChatGPT (no local xserver checkout/terminal access in this session). No vulnerable-vs-fixed red/green run has yet been executed. No review approval; do not merge. Owner retains merge authority.
 - Next: collect the ASan xtest_test result and inspect its log to prove the test ran; finish remaining exact-head CI; if green, run a controlled vulnerable-parent red check and rebase against current master, then require fresh exact-head CI and review before asking owner about merge.
 
-### Issue #40 continuation checkpoint — 2026-11-27 16:40Z
+### Issue #40 continuation checkpoint — 2026-11-27 16:52Z
 
 - Revalidated `mpbt-hq/starfleetctl`: master remains `9d01e0470a9ec1d9f7740bc608ff59c3b8403a03`; feature branch `feat/session-stable-pty-restart` is reset to `0143ba022e28b567a738427f06154c0433de1827`, 8 commits ahead and 0 behind.
 - Draft PR [#41](https://github.com/mpbt-hq/starfleetctl/pull/41) is the single working PR and remains explicitly draft/not ready for review.
