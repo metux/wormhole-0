@@ -497,3 +497,16 @@ Recommended remediation order: (1) web/proxy security boundary and symlink-safe 
 - Continue issue #30 runtime-health work only after checking deployment/production evidence; issue #30 remains open. No open PRs were present at the 2026-11-27 check.
 - Next, design Wormhole truncation and status sync without changing the spool until migration/format decisions are agreed.
 - Then introduce reusable Git/GitHub packages with compatibility tests and migrate duplicate call sites incrementally.
+
+
+## Continuation checkpoint — 2026-11-27 15:57Z — Starfleetctl issue #40
+
+- Current task: `mpbt-hq/starfleetctl#40` stable-PTY OpenCode child restart. Feature branch `feat/session-stable-pty-restart` now points to `58329b99fe74a139ff7bd1b8c89b93f45482f798` (based on master `9d01e0470a9ec1d9f7740bc608ff59c3b8403a03`).
+- First bounded safety patch committed:
+  - `internal/session/launch.go` validates a replacement model before the legacy restart path touches its existing child.
+  - `RestartShip` now requires an explicit control-socket acknowledgement; it no longer treats read/EOF errors as success.
+  - New `internal/session/control.go` applies dial and I/O deadlines and writes a newline-terminated command; `internal/session/control_test.go` covers OK, supervisor rejection and missing acknowledgement.
+- Exact-head GitHub Actions run `46028611025`: `go build ./...` and `go vet ./...` completed successfully on Go 1.22.x and stable; plugin typecheck/tests passed. Both full `go test ./... -count=1 -timeout 300s` matrix steps were still in progress at last poll. Do not call the full suite green until both finish successfully.
+- Enterprise's testbed-preparation requests (`w0-20261127T150817Z-chatgpt-issue40-testbed-v2` and follow-up `w0-20261127T152802Z-chatgpt-issue40-testbed-nudge`) were imported to `processed/`, but no correlated reply was found. A further exact-head test request (`w0-20261127T155400Z-chatgpt-issue40-test-run`, branch HEAD above) was also imported; that is import evidence only, not acknowledgement or test execution.
+- Important limitation: this patch is preparatory hardening only. The existing listener still belongs to the `LaunchShip` caller and the legacy restart still replaces `termctl-run`. Issue #40's required in-PTY supervisor/child-only restart is NOT implemented. No real-PTY tests, local tests, live ship signals, restarts or deployments have been performed by ChatGPT.
+- Next: collect the exact-head CI result and Enterprise's explicit testbed report; then implement the persistent in-PTY supervisor and process-group/foreground-TTY handoff, with real-PTY tests proving the same `termctl-run` PID, PTY identity, control pipe inode and scrollback survive while only the OpenCode process tree changes. Keep the patch on the feature branch; do not claim issue #40 complete or open a ready-for-merge PR until those tests pass.
