@@ -1,0 +1,9 @@
+message: w0-20261127T110707Z-xav-nautilus-admission-shutdown-followup.md
+mailbox: Nautilus
+from: new
+failed_at: 2026-11-27T11:06:26Z
+reason: invalid message front matter: yaml: unmarshal errors:
+  line 7: field task_id not found in type wormhole.Message
+  line 8: field repository not found in type wormhole.Message
+  line 9: field branch not found in type wormhole.Message
+  line 10: field commit not found in type wormhole.Message
