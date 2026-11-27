@@ -573,3 +573,15 @@ Keep #4240 Draft until exact-head CI completes and the complete diff receives an
 ### 2026-11-27 correction — one-byte first-read probe
 
 A further review found that merely capping the first read to needed - gotnow (normally four bytes for xReq) is insufficient: two SCM_RIGHTS groups attached to successive partial header fragments could be coalesced by one four-byte recvmsg(), and _XSERVTransGetLastReadFdCount() reports only the combined descriptor count for that read. The HDR-only candidate therefore requires the first positive read of every request to be exactly **one byte**. This isolates the ancillary group attached to the request's first byte. Every subsequent positive read is bounded to needed - gotnow, and any nonzero FD count on those later reads is rejected. EAGAIN/zero-byte reads do not advance the per-request state. This costs one extra read operation per negotiated HDR request but avoids inferring group boundaries from a coalesced read. The candidate is recorded in spec section 30.27; it remains a design candidate, not an approved wire ABI or implementation authorization.
+
+
+## 2026-11-27 — One-byte receive-probe regression alignment
+
+A source/test review found that a four-byte first header read could coalesce SCM_RIGHTS groups attached to successive partial-header writes. The HDR-only receive candidate now requires an exact one-byte first positive read at each request boundary; subsequent reads remain bounded to the current request and reject any later nonzero FD count. Specification section 30.27 records the corrected candidate and its one-extra-read cost.
+
+The transport regressions now model this exact rule:
+
+- #4230 head `5bc5fc17afa4dc559f314baa4d3d0b9e11e33b96`: the request-bounded test uses a one-byte first read, and the multiple-groups test attaches groups to the first and second request-header bytes, verifying that the second group arrives on a later read. Exact-head CI run `45995093049` is queued.
+- #4232 head `d0cf2465da15f2fdc3ca9fc41dd98da44d90b86a`, still stacked on #4231 head `fd0443f1d0e79fcaf2eb3f30b43963e5edbc5a32`: the per-read count test now uses read sizes 1, 1, 2, 4 and observes 0, 2, 1, 0. A new exact-head workflow run has not appeared yet; previous green runs apply only to the superseded head.
+
+No local Xserver build/test has been run. #4230 and #4232 remain Draft/open/unmerged. The candidate is not an approved wire ABI or authorization to implement the HDR request parser.
