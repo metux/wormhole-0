@@ -2475,3 +2475,29 @@ This section resolves the receive-side conflict between the provisional strict-c
 - This receive-side decision does not resolve the separate send-side ordering hazard in §§30.28–30.30. Do not implement AcquireBuffer FD-bearing replies until their output ordering and ownership are proven; do not change legacy DRI3 behavior as collateral work.
 
 No Xserver source, Xtrans behavior, XCB XML, generated binding, or wire ABI was changed by this clarification.
+
+
+## 30.41 — Current Xserver and libxcb FD output ordering recheck (2026-11-28)
+
+Rechecked the send path against X11Libre/xserver master `ba6a3b9ede108bf3538cf7657446d2371b89221b` and X11Libre/mirror.fdo.libxcb master `aa7f3256060451ad65a38feeccf792f44181a4e0`. This is source-level evidence; no runtime reproducer has yet been run.
+
+### Xserver reply path
+
+- `dri3_send_open_reply()` calls WriteFdToClient() and then emits the reply through X_SEND_REPLY_SIMPLE(). This is the established DRI3 pattern.
+- In `os/io.c`, `dixWriteToClient()` takes the direct local-client flush path only when the output buffer is empty. If earlier output remains buffered (for example after EAGAIN), the new reply is appended behind those bytes.
+- `FlushClient()` later calls `_XSERVTransWrite()` with the entire pending output buffer. In `os/Xtranssock.c`, `_XSERVTransSocketWrite()` attaches the queued send-FD list to the first byte of that write via sendmsg().
+- Therefore, if WriteFdToClient() queues an FD while older output bytes are pending, the FD group can be attached to the older reply/event rather than the DRI3/HDR reply that owns it. This is a plausible ordering hazard in the shared legacy path, not proof that ordinary DRI3 traffic commonly triggers it.
+
+### libxcb request path
+
+- In `src/xcb_out.c`, `send_fds()` calls `prepare_socket_request()` and stages descriptors in `c->out.out_fd`; it does not first drain `c->out.queue`.
+- `xcb_send_request_with_fds64()` then appends the FD-bearing request through `send_request()`. If earlier ordinary request bytes remain queued, the eventual sendmsg() can attach the staged descriptors to the beginning of that older queue data.
+- The generated `<fd>` binding and `XCB_REQUEST_REPLY_FDS` handling solve reply-side association, but do not by themselves prove outgoing byte-boundary ordering.
+
+### Required next validation
+
+Before using FD-bearing HDR replies or release requests in a real compositor, add minimal client and server regression reproducers that deliberately buffer an ordinary request/reply before an FD-bearing operation, then exercise partial writes and EAGAIN. Verify the ancillary group is attached to the first byte of the owning request/reply in every case. Include two consecutive FD-bearing operations and connection teardown.
+
+If reproduced, fix the output queue boundary in a narrowly scoped, reviewed way. Keep legacy DRI3 behavior stable and do not claim the existing FIFO is sufficient for send-side byte ordering merely because the common empty-buffer fast path works. This is separate from the receive-side DRI3 FIFO decision in §30.40.
+
+No Xserver or libxcb source code, protocol XML, generated binding, or tests were changed by this audit.
