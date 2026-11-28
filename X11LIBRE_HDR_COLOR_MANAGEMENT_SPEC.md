@@ -1759,7 +1759,7 @@ The reply contains:
 
 Each plane record's object_index must be less than object_count. The server validates object_count (1..4), plane_count (1..4), dimensions, format/modifier pair, per-plane object index, stride/offset bounds and total descriptor size before sending. The client validates the same invariants before importing. FDs are not serialized as integer descriptor numbers in the ordinary X packet.
 
-The release request carries either one FD (FENCED) or none (NO_USE). The server must validate the declared fd_count against release_mode and the actual received ancillary-FD count; malformed combinations must not be interpreted as implicit release.
+The release request carries either one declared FD (FENCED) or none (NO_USE). The server validates the declared fd_count against release_mode and consumes that many descriptors through the existing Xtrans FIFO. It cannot verify that no surplus ancillary FDs accompanied the request; see section 30.40.
 
 ### Alignment and event sizing
 
@@ -2462,3 +2462,16 @@ versioned color-management request) and the authority/source for final composed
 frame metadata are still unresolved. This audit narrows the internal
 modesetting integration point but does not choose either API. No Xserver code
 or RandR property ABI was changed.
+
+
+## 30.40 — ReleaseBuffer receive semantics follow the existing DRI3 FIFO (2026-11-28)
+
+This section resolves the receive-side conflict between the provisional strict-count wording in §§30.17–30.21 and the owner priority decision in §30.37. It does not authorize Xtrans/DIX refactoring.
+
+- HDR v1 uses the existing connection-level Xtrans receive-FD FIFO and the established DRI3/SHM request-handler pattern. A FENCED ReleaseBuffer declares one FD and calls SetReqFds(client, 1) before ReadFdFromClient(); NO_USE declares zero and consumes none. The request's fd_count exists to describe the XCB list-of-FD field and to validate the mode/count pair.
+- ClientRec.req_fds is an expected-to-consume counter, not a count of descriptors actually received for the current X request. The current FIFO does not retain request association, so the handler cannot prove that the peer sent exactly the declared number, nor reliably reject surplus descriptors at that request boundary. Do not describe fd_count as actual transport validation or as a security boundary.
+- The v1 contract therefore follows the existing DRI3 trust model: a conforming local compositor sends exactly the declared FD group. The server validates the declared mode/count pair, consumes the expected descriptors, and closes any expected-but-unconsumed descriptors through normal request cleanup. This does not add protection against a malicious or malformed peer that injects surplus ancillary FDs; such a peer can desynchronize its own connection-level FIFO. The compositor claim/authorization model remains a separate security gate.
+- Do not implement request-bounded receive, marker-offset accounting, or generic Xtrans changes for HDR now. The marker-offset inference described in §30.20 is invalid for coalesced reads; §30.22 and §30.37 remain authoritative. If strict per-request surplus-FD rejection later becomes a requirement, it needs a separately approved transport design and dedicated regression coverage before the HDR protocol may claim that guarantee.
+- This receive-side decision does not resolve the separate send-side ordering hazard in §§30.28–30.30. Do not implement AcquireBuffer FD-bearing replies until their output ordering and ownership are proven; do not change legacy DRI3 behavior as collateral work.
+
+No Xserver source, Xtrans behavior, XCB XML, generated binding, or wire ABI was changed by this clarification.
