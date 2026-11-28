@@ -631,3 +631,10 @@ Recommended remediation order: (1) web/proxy security boundary and symlink-safe 
 - Enterprise's latest status messages to ChatGPT (11:56Z) reported no testbed ship and no genuinely idle ship; Discovery and Voyager were shown idle with stale sessions. This is a reported board snapshot, not proof of actual availability. The exact-head testbed request `w0-20261128T101408Z-chatgpt-issue40-testbed-head3` was imported to `mail/Enterprise/processed/` at 10:14Z, but no correlated acknowledgement or execution report was found.
 - A fresh coordination-only follow-up `w0-20261128T130250Z-chatgpt-issue40-testbed-nudge` was published to `mail/Enterprise/new/` at commit `1a0b3595e2256fcbadb486eb0dc9502f37bd740f`. The exact message passed the bundled Wormhole validator (VALID) before publication and was fetched back byte-for-byte. It requests explicit acknowledgement, live availability verification, and either coordination of one suitable isolated testbed operator or an explicit blocked report. It repeats all live-ship/process and source-edit exclusions. Publication is not import, acknowledgement, assignment, or execution.
 - The branch still has 69 incremental commits; defer squashing until machine-side validation is complete, then squash to one signed-off commit and rerun exact-head CI. Do not mark PR ready, merge, or deploy before the remaining acceptance gates and final review.
+
+
+### Issue #40 Wormhole nudge import check — 2026-11-28 13:03Z
+
+- Enterprise's manager claimed `w0-20261128T130250Z-chatgpt-issue40-testbed-nudge` at 13:02:24Z and moved it to `mail/Enterprise/processed/` at 13:02:26Z. This proves import only.
+- No correlated acknowledgement, assignment, blocked report, testbed build, or console execution is established. The exact immutable message is present in `processed/`; it was not edited or replayed.
+- Keep PR #41 Draft and leave live ships untouched. Wait for an explicit correlated response and machine-side evidence before treating the testbed work as started.
