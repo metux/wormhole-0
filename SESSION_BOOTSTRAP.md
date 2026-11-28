@@ -613,3 +613,10 @@ Recommended remediation order: (1) web/proxy security boundary and symlink-safe 
 - Exact-head testbed request `w0-20261128T101408Z-chatgpt-issue40-testbed-head3` was published to `mail/Enterprise/new/` at commit `bfe118dfb0291d4a132054f4c9f72e431720c2b5`; the exact file was fetched back and confirmed in the active `new/` mailbox. It targets `mpbt-hq/starfleetctl:feat/session-stable-pty-restart` HEAD `98295584460df2670a25a2c729970b04347ec285`, with green runs #786/#787.
 - Before publication, the exact message was checked with the bundled `validate_message.py` source from `X11Libre/mpbt-workspace:mtx/agent-config`; it printed `VALID`. The message requests explicit acknowledgement, isolated testbed/build, and (only if safe) one disposable console ship in a dedicated xterm. It prohibits live-ship/process actions, source edits, deployment, merge, and broad process cleanup.
 - Publication is the only established lifecycle stage so far. Do not infer import, acknowledgement, testbed creation, or console execution. Next: check the mailbox lifecycle and require a correlated explicit acknowledgement/report before treating machine-side validation as started.
+
+
+### Issue #40 Wormhole import check — 2026-11-28 10:15Z
+
+- Enterprise's manager moved `w0-20261128T101408Z-chatgpt-issue40-testbed-head3` from `mail/Enterprise/new/` to `mail/Enterprise/processed/`. This establishes import only.
+- No correlated reply/ack was found in `mail/ChatGPT/new/`, and no `cur/` or `failed/` entry remains for the request. No testbed creation, `make all`, xterm launch, or console validation is established.
+- Continue to require explicit acknowledgement and machine-side evidence. Do not start or touch any live ship while waiting.
